@@ -13,9 +13,10 @@ Adafruit_MotorShield AFMS = Adafruit_MotorShield();
 Adafruit_DCMotor *MotorLeft = AFMS.getMotor(1);
 Adafruit_DCMotor *MotorRight = AFMS.getMotor(2);
 
-int8_t LEFT_LINE_SENSOR_PIN = 7;
-int8_t RIGHT_LINE_SENSOR_PIN = 6;
-int8_t FRONT_LINE_SENSOR_PIN = 5;
+int8_t WIDE_RIGHT_LINE_SENSOR_PIN = 13;
+int8_t WIDE_LEFT_LINE_SENSOR_PIN = 12;
+int8_t FRONT_RIGHT_LINE_SENSOR_PIN = 11;
+int8_t FRONT_LEFT_LINE_SENSOR_PIN = 10;
 
 float WHEEL_DIAMETER = 64; //mm
 float LINEAR_SPEED_200 =  PI * (8/9.85) * WHEEL_DIAMETER; // in mms-1 at speed 200
@@ -23,23 +24,21 @@ float LINEAR_SPEED_200 =  PI * (8/9.85) * WHEEL_DIAMETER; // in mms-1 at speed 2
 int16_t STATE = 1; // 0: idle, 1: moving
 
 enum LINE_FOLLOW_STATE {
-  CENTRAL_LINE_AHEAD, // the side sensors both read black and the front sensor reads white i.e we're on track and there's road ahead
-  CENTRAL_NO_LINE_AHEAD, // the side sensors both read black and the front sensor reads black i.e we're on track but out of road
-  LINE_TO_LEFT_AHEAD, //the left sensor reads white and the right sensor reads black and the front sensor reads white
-  LINE_TO_RIGHT_AHEAD, //options to the right and ahead like above
-  LINE_TO_LEFT_NO_AHEAD, //as above but front black
-  LINE_TO_RIGHT_NO_AHEAD,
+  CENTRAL, //front two white, side two black
+  LINE_TO_RIGHT, //front right white, front left black, side two black
+  LINE_TO_LEFT, //front left white, front right black, side two black
   UNSURE // catch-all
+};
+
+struct JUNCTION {
+  bool AHEAD;
+  bool LEFT;
+  bool RIGHT;
 };
 
 void setup() {
   Serial.begin(9600);  
   Serial.println("initialising the absolute bear minimum...");
-
-  pinMode(8, OUTPUT); //using pin 8 as a 5v supply
-  pinMode(9, OUTPUT); //using pin 9 as a 5v supply //TODO get rid of this and put a proper shield on the Arduino with connectors for the sensors
-  digitalWrite(8, HIGH);
-  digitalWrite(9, HIGH);
   
 
   // motor initialisation
@@ -49,6 +48,7 @@ void setup() {
     Serial.println("Could not find Motor Shield. Check wiring.");
     while (1);
   }
+
   Serial.println("Motor Shield found.");
 
   pinMode(7, INPUT); //line sensors
@@ -58,28 +58,42 @@ void setup() {
 }
 
 LINE_FOLLOW_STATE ReadLineFollowSensors () {
-  bool leftSensor = !digitalRead(LEFT_LINE_SENSOR_PIN);
-  bool rightSensor = !digitalRead(RIGHT_LINE_SENSOR_PIN);
-  bool frontSensor = !digitalRead(FRONT_LINE_SENSOR_PIN);
-  if (leftSensor and rightSensor and (not frontSensor)) {
-    return CENTRAL_LINE_AHEAD;
-  } else if (leftSensor and rightSensor and frontSensor) {
-    return CENTRAL_NO_LINE_AHEAD;
-  } else if (leftSensor and (not rightSensor)) {
-    if (not frontSensor) {
-      return LINE_TO_RIGHT_AHEAD;
-    } else {
-      return LINE_TO_RIGHT_NO_AHEAD;
+  bool wideLeftSensor = digitalRead(WIDE_LEFT_LINE_SENSOR_PIN); //typecast to bool where true is white and black is false
+  bool wideRightSensor = digitalRead(WIDE_RIGHT_LINE_SENSOR_PIN);
+  bool frontLeftSensor = digitalRead(FRONT_LEFT_LINE_SENSOR_PIN);
+  bool frontRightSensor = digitalRead(FRONT_RIGHT_LINE_SENSOR_PIN);
+
+  if (!wideLeftSensor and !wideRightSensor) {
+  
+    if (frontLeftSensor and frontRightSensor) {
+      return CENTRAL;
     }
-  } else if (rightSensor and (not leftSensor)) {
-    if (not frontSensor) {
-      return LINE_TO_LEFT_AHEAD;
-    } else {
-      return LINE_TO_LEFT_NO_AHEAD;
+
+    else if (frontLeftSensor and !frontRightSensor) {
+      return LINE_TO_LEFT;
     }
-  } else {
-    return UNSURE;
+
+    else if (!frontLeftSensor and frontRightSensor) {
+      return LINE_TO_RIGHT;
+    }
+
   }
+
+  return UNSURE;
+
+}
+
+JUNCTION AssessJunction () {
+  bool wideLeftSensor = digitalRead(WIDE_LEFT_LINE_SENSOR_PIN); //typecast to bool where true is white and black is false
+  bool wideRightSensor = digitalRead(WIDE_RIGHT_LINE_SENSOR_PIN);
+  bool frontLeftSensor = digitalRead(FRONT_LEFT_LINE_SENSOR_PIN);
+  bool frontRightSensor = digitalRead(FRONT_RIGHT_LINE_SENSOR_PIN);
+
+  bool ahead_loc = (frontRightSensor and frontLeftSensor);
+  bool left_loc = wideLeftSensor;
+  bool right_loc = wideRightSensor;
+
+  return JUNCTION{ahead_loc, left_loc, right_loc};
 }
 
 void Drive(bool forward, int16_t speed, double differential) { // speed is an int from 0-255, differential is a percentage difference between the two motors with +ve turning left and -ve turning right.
@@ -103,18 +117,6 @@ void Drive(bool forward, int16_t speed, double differential) { // speed is an in
   }
 }
 
-void TankTurn(bool clockwise, int16_t speed) { //TODO: change in terms of degrees
-if (clockwise) {
-  MotorLeft->run(FORWARD);
-  MotorRight->run(BACKWARD);
-  } else {
-  MotorLeft->run(BACKWARD);
-  MotorRight->run(FORWARD);
-  };
-  MotorLeft->setSpeed(speed);
-  MotorRight->setSpeed(speed);
-}
-
 void StopDriving() {
   MotorLeft->run(RELEASE);
   MotorRight->run(RELEASE);
@@ -127,40 +129,27 @@ void DriveDistanceStraight(bool forward_loc, double distance) { //distance in mm
   StopDriving();
 }
 
-void SimpleLineFollow () {
+void LineFollowToJunction () {
   LINE_FOLLOW_STATE followState = ReadLineFollowSensors(); //simplest possible line follower
   Serial.println(followState);
   switch (followState)
   {
-  case CENTRAL_LINE_AHEAD:
+  case CENTRAL:
     Drive(true, 200, 0);
     break;
 
-  case CENTRAL_NO_LINE_AHEAD:
+  case LINE_TO_LEFT:
+    Drive(true, 200, 18);;
+    break;
+  
+  case LINE_TO_RIGHT:
+    Drive(true, 200, -18);;
+    break;
+
+  case UNSURE:
     StopDriving();
-    // STATE = 0;
     break;
-
-  case LINE_TO_LEFT_AHEAD:
-    Drive(true, 200, 15);
-    break;
-  
-  case LINE_TO_RIGHT_AHEAD:
-    Drive(true, 200, -15);
-    break;
-
-  case LINE_TO_LEFT_NO_AHEAD:
-    Drive(true, 200, 15);
-    break;
-  
-  case LINE_TO_RIGHT_NO_AHEAD:
-    Drive(true, 200, -15);
-    break;
-
-  default:
-    Drive(true, 200, 0);
-    break;
-  }
+  }   
 }
 
 void loop() {
