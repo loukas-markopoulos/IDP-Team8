@@ -51,9 +51,7 @@ void setup() {
 
   Serial.println("Motor Shield found.");
 
-  pinMode(7, INPUT); //line sensors
-  pinMode(6, INPUT);
-  pinMode(5, INPUT);
+  delay(5000); //so we can get some stuff done before the thing do
 
 }
 
@@ -122,41 +120,60 @@ void StopDriving() {
   MotorRight->run(RELEASE);
 }
 
-void DriveDistanceStraight(bool forward_loc, double distance) { //distance in mm
-  float timeToDrive = (distance / LINEAR_SPEED_200) * 1000;
-  Drive(forward_loc, 200, 0);
-  delay(timeToDrive);
-  StopDriving();
+JUNCTION LineFollowToJunction () {
+  while (true) {
+    LINE_FOLLOW_STATE followState = ReadLineFollowSensors();
+    switch (followState)
+    {
+    case CENTRAL:
+      Drive(true, 200, 0);
+      break;
+
+    case LINE_TO_LEFT:
+      Drive(true, 200, 22);;
+      break;
+    
+    case LINE_TO_RIGHT:
+      Drive(true, 200, -22);;
+      break;
+
+    case UNSURE:
+      StopDriving();
+      JUNCTION NewJunction = AssessJunction();  
+      return NewJunction;
+    }   
+  }
 }
 
-JUNCTION LineFollowToJunction () {
-  LINE_FOLLOW_STATE followState = ReadLineFollowSensors();
+void Turn90Degrees(bool right) {
 
-  switch (followState)
-  {
-  case CENTRAL:
-    Drive(true, 200, 0);
-    break;
+  int16_t differential = right ? -90 : 90;
+  bool turning = true;
+  Drive(true, 200, differential);
+  delay(1500); //let's let it start the turn before we start checking the sensors to see if we're done
 
-  case LINE_TO_LEFT:
-    Drive(true, 200, 18);;
-    break;
-  
-  case LINE_TO_RIGHT:
-    Drive(true, 200, -18);;
-    break;
+  while (turning) {
+    bool frontLeftSensor = digitalRead(FRONT_LEFT_LINE_SENSOR_PIN);
+    bool frontRightSensor = digitalRead(FRONT_RIGHT_LINE_SENSOR_PIN);
 
-  case UNSURE:
-    StopDriving();
-    JUNCTION NewJunction = AssessJunction();  
 
-    return NewJunction;
+    Drive(true, 200, differential);
+    turning = !(frontLeftSensor and frontRightSensor);
+  };
 
-  }   
+  StopDriving();
+  Serial.println("Turn Complete!");
 }
 
 void loop() {
   if (STATE == 1) {
-    LineFollowToJunction();
+    JUNCTION nextJunction = LineFollowToJunction();
+    if (nextJunction.LEFT) {
+      Turn90Degrees(false);
+    } else if (nextJunction.RIGHT) {
+      Turn90Degrees(true);
+    } else {
+      STATE = 0;
+    }
   }
 }
