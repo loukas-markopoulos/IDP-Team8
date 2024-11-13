@@ -129,9 +129,9 @@ void DriveDistanceStraight(bool forward_loc, double distance) { //distance in mm
   StopDriving();
 }
 
-void LineFollowToJunction () {
-  LINE_FOLLOW_STATE followState = ReadLineFollowSensors(); //simplest possible line follower
-  Serial.println(followState);
+JUNCTION LineFollowToJunction () {
+  LINE_FOLLOW_STATE followState = ReadLineFollowSensors();
+
   switch (followState)
   {
   case CENTRAL:
@@ -148,12 +148,15 @@ void LineFollowToJunction () {
 
   case UNSURE:
     StopDriving();
-    break;
+    JUNCTION NewJunction = AssessJunction();  
+
+    return NewJunction;
+
   }   
 }
 
 void loop() {
   if (STATE == 1) {
-    SimpleLineFollow();
+    LineFollowToJunction();
   }
 }
