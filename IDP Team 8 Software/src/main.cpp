@@ -145,21 +145,51 @@ JUNCTION LineFollowToJunction () {
   }
 }
 
-void Turn90Degrees(bool right) {
+void TurnUntilLine(bool right) {
+
+  bool turning = true;
 
   int16_t differential = right ? -90 : 90;
-  bool turning = true;
-  Drive(true, 200, differential);
-  delay(1500); //let's let it start the turn before we start checking the sensors to see if we're done
+
+  int16_t TURN_STATE = 0;
+    // 0: STARTING
+    // 1: CENTRAL, trips when both central sensors cross
+    // 2: OVERSHOOT, trips when far wide sensor crosses ie we've overshot
 
   while (turning) {
     bool frontLeftSensor = digitalRead(FRONT_LEFT_LINE_SENSOR_PIN);
     bool frontRightSensor = digitalRead(FRONT_RIGHT_LINE_SENSOR_PIN);
+    bool wideLeftSensor = digitalRead(WIDE_LEFT_LINE_SENSOR_PIN); //typecast to bool where true is white and black is false
+    bool wideRightSensor = digitalRead(WIDE_RIGHT_LINE_SENSOR_PIN);
 
+    bool firstSensor = right ? wideRightSensor : wideLeftSensor; // which direction?
+    bool lastSensor = right ? wideLeftSensor : wideRightSensor;
+    bool central = frontLeftSensor and frontRightSensor;
 
-    Drive(true, 200, differential);
-    turning = !(frontLeftSensor and frontRightSensor);
-  };
+    switch (TURN_STATE) {
+      case 0:
+        Drive(true, 200, differential);
+      case 1:
+        StopDriving();
+        turning = false;
+      case 2:
+        Drive(true, 200, -differential);
+    };
+
+    if (central) {
+      TURN_STATE = 1;
+    }
+
+    if (lastSensor) {
+      TURN_STATE = 2;
+    }
+
+    if (firstSensor and TURN_STATE = 2) {
+      TURN_STATE = 0;
+    }
+
+  }
+};
 
   StopDriving();
   Serial.println("Turn Complete!");
@@ -169,9 +199,9 @@ void loop() {
   if (STATE == 1) {
     JUNCTION nextJunction = LineFollowToJunction();
     if (nextJunction.LEFT) {
-      Turn90Degrees(false);
+      TurnUntilLine(false);
     } else if (nextJunction.RIGHT) {
-      Turn90Degrees(true);
+      TurnUntilLine(true);
     } else {
       STATE = 0;
     }
