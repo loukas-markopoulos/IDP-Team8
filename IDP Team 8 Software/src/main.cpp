@@ -100,8 +100,6 @@ void Drive(bool forward, int16_t speed, double differential) { // speed is an in
     double rightPower = (differential < 0) ? speed * (1 + (differential/100)) : speed;
     MotorLeft->run(BACKWARD);
     MotorRight->run(BACKWARD); //backwards is forwards in our hardware configuration
-    Serial.println(leftPower);
-    Serial.println(rightPower);
     MotorLeft->setSpeed(leftPower);
     MotorRight->setSpeed(rightPower);
   }
@@ -146,63 +144,61 @@ JUNCTION LineFollowToJunction () {
 }
 
 void TurnUntilLine(bool right) {
-
+  int16_t differential = right ? -80 : 80; //80 seems perfect for the right turn but the left turn is a bit crap
   bool turning = true;
-
-  int16_t differential = right ? -90 : 90;
-
-  int16_t TURN_STATE = 0;
-    // 0: STARTING
-    // 1: CENTRAL, trips when both central sensors cross
-    // 2: OVERSHOOT, trips when far wide sensor crosses ie we've overshot
-
+  Drive(true, 200, differential);
+  delay(1500); //let's let it start the turn before we start checking the sensors to see if we're done
   while (turning) {
     bool frontLeftSensor = digitalRead(FRONT_LEFT_LINE_SENSOR_PIN);
     bool frontRightSensor = digitalRead(FRONT_RIGHT_LINE_SENSOR_PIN);
-    bool wideLeftSensor = digitalRead(WIDE_LEFT_LINE_SENSOR_PIN); //typecast to bool where true is white and black is false
-    bool wideRightSensor = digitalRead(WIDE_RIGHT_LINE_SENSOR_PIN);
-
-    bool firstSensor = right ? wideRightSensor : wideLeftSensor; // which direction?
-    bool lastSensor = right ? wideLeftSensor : wideRightSensor;
-    bool central = frontLeftSensor and frontRightSensor;
-
-    switch (TURN_STATE) {
-      case 0:
-        Drive(true, 200, differential);
-      case 1:
-        StopDriving();
-        turning = false;
-      case 2:
-        Drive(true, 200, -differential);
-    };
-
-    if (central) {
-      TURN_STATE = 1;
-    }
-
-    if (lastSensor) {
-      TURN_STATE = 2;
-    }
-
-    if (firstSensor and TURN_STATE = 2) {
-      TURN_STATE = 0;
-    }
-
-  }
+    Drive(true, 200, differential);
+    turning = !(frontLeftSensor and frontRightSensor);
+  };
+  StopDriving();  
 };
 
-  StopDriving();
-  Serial.println("Turn Complete!");
-}
+struct PATHSTEP {
+    int nodeId;                  // Unique ID for each node
+    String exitDirection;        // Direction the robot should take when leaving ("straight","left","right","turnaround")
+};
+
+PATHSTEP sample_path[] = {
+    {2, "straight"},
+    {1, "right"},
+    {4, "right"},
+    {5, "left"},
+    {11, "straight"},
+    {7, "right"},
+    {8, "straight"},
+    {13, "right"},
+    {6, "right"},
+    {5, "straight"},
+    {4, "left"},
+    {1, "left"},
+    {2, "straight"},
+};
+
+int currentNode = 0;
 
 void loop() {
   if (STATE == 1) {
-    JUNCTION nextJunction = LineFollowToJunction();
-    if (nextJunction.LEFT) {
+    JUNCTION junction = LineFollowToJunction();
+    delay(1000);
+    String nextAction = sample_path[currentNode].exitDirection;
+    if (nextAction == "straight") {
+      Drive(true, 200, 0);
+      Serial.println("goin' straight");
+      delay(500);
+    } else if (nextAction == "left") {
+      Serial.println("turnin' left");
       TurnUntilLine(false);
-    } else if (nextJunction.RIGHT) {
+    } else if (nextAction == "right") {
+      Serial.println("turnin' right");
       TurnUntilLine(true);
-    } else {
+    }
+    currentNode++;
+    delay(1000);
+    if (currentNode > 12) {
       STATE = 0;
     }
   }
