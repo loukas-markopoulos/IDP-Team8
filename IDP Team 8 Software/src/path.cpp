@@ -126,6 +126,7 @@ PathStep main_path[] = {
     {12, 'right', 'checkBox1Type'},
     // Magnetic (9) from 12
     // Non Magnetic (10) from 12
+    // Drop Box
 
 
     // BOX2 NODE 5
@@ -133,6 +134,7 @@ PathStep main_path[] = {
     {5, 'turnaround', 'checkBox2Type'},
     // Magnetic (9) from 5
     // Non Magnetic (10) from 5
+    // Drop Box
 
 
     // BOX3 NODE 6-5
@@ -142,6 +144,7 @@ PathStep main_path[] = {
     {5, 'right', 'checkBox3Type'},
     // Magnetic (9) from 5
     // Non Magnetic (10) from 5
+    // Drop Box
 
 
     // BOX4 NODE 2-3
@@ -155,6 +158,7 @@ PathStep main_path[] = {
     {12, 'right', 'checkBox4Type'}
     // Magnetic (9) from 12
     // Non Magnetic (10) from 12
+    // Drop Box
 
 
     // BOX5 OFF NODE 6-5 LINE
@@ -164,6 +168,7 @@ PathStep main_path[] = {
     {5, 'right', 'checkBox5Type'},
     // Magnetic (9) from 5
     // Non Magnetic (10) from 5
+    // Drop Box
 
 
     // BOX6 OFF NODE 1-2 LINE
@@ -175,6 +180,7 @@ PathStep main_path[] = {
     {3, 'left', 'checkBox6Type'},
     // Magnetic (9) from 3 and back to start
     // Non Magnetic (9) from 3 and back to start
+    // Drop Box
 };
 
 void followPath(PathStep main_path[]) {
