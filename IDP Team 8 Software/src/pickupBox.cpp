@@ -3,7 +3,7 @@
 // For boxes on the line:
 // Detect box is there
 // Approach box until within lift range
-// Close pickup mechanism 
+// Close pickup mechanism
 // Lift box 
 // Detect magnetic or non magnetic
 

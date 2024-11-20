@@ -183,6 +183,9 @@ PathStep main_path[] = {
     // Drop Box
 };
 
+
+// TODO: replace all repeated code (if straight moveStraight() etc.) with followPath() functions)
+
 void followPath(PathStep main_path[]) {
 
     int pathLengthMain = sizeof(main_path) / sizeof(PathStep);
