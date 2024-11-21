@@ -74,9 +74,9 @@ void loop() {
 
     // stop when box is at desired distance
     if (distance < 2){                      // DISTANCE TO BE SET PROPERLY LATER
+        break;
         
-        
-    }                      
+    }
     // average next 15 values (max US f 30Hz)
     // if average <= desired distance:
     // run pickup
