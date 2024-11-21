@@ -130,11 +130,11 @@ JUNCTION LineFollowToJunction () {
       break;
 
     case LINE_TO_LEFT:
-      Drive(true, 200, 22);;
+      Drive(true, 200, 22);
       break;
     
     case LINE_TO_RIGHT:
-      Drive(true, 200, -22);;
+      Drive(true, 200, -22);
       break;
 
     case UNSURE:
