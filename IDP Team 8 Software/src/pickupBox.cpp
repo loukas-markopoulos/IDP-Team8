@@ -59,26 +59,43 @@ void pickup() {
     delay(1000);                // then take current reading (for weight)
 }
 
-void loop() {
-
-    // Detect distance
+double returnDistance() {
     digitalWrite(trigPin, LOW);
     delayMicroseconds(2);
     digitalWrite(trigPin, HIGH);
     delayMicroseconds(10);
     digitalWrite(trigPin, LOW);
 
-    long duration = pulseIn(echoPin, HIGH);
-    long distance = duration * 0.034 / 2;   // distance of object in cm
+    double duration = pulseIn(echoPin, HIGH);
+    double distance = duration * 0.034 / 2;   // distance of object in cm
 
+    return distance;
+}
+
+double getAverageReadings(int numReadings, double minDistance) {
+    float readingsSum = 0;
+    for(int i = 0; i < numReadings; i++) {
+        readingsSum += returnDistance();
+    }
+    double averageReading = readingsSum / numReadings;
+    return averageReading;
+}
+
+void loop() {
+    // Move forward
+
+    // Detect distance
+    long distance = returnDistance();
 
     // stop when box is at desired distance
-    if (distance < 2){                      // DISTANCE TO BE SET PROPERLY LATER
-        break;
-        
+    if (distance < 2) {
+        if (getAverageReadings(10, 2) < 2.3) {  // this loop gets more readings and averages to confirm object indeed within range (i.e. not random fluctuation)
+            pickup();
+        }
     }
     // average next 15 values (max US f 30Hz)
     // if average <= desired distance:
     // run pickup
     // else carry on 
 }
+
