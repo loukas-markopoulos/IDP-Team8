@@ -3,9 +3,6 @@
 #include <SPI.h>
 #include <Adafruit_MotorShield.h>
 
-//caution: i use hella doubles because i am cautious, lazy and do not believe in such a thing as 'memory management'
-//at speed 200, the unloaded motor completes 8 revolutions in 9.85 seconds. let's use 200 as our "standard speed"
-
 // Create the motor shield object with the default I2C address
 Adafruit_MotorShield AFMS = Adafruit_MotorShield();
 
@@ -18,10 +15,23 @@ int8_t WIDE_LEFT_LINE_SENSOR_PIN = 12;
 int8_t FRONT_RIGHT_LINE_SENSOR_PIN = 11;
 int8_t FRONT_LEFT_LINE_SENSOR_PIN = 10;
 
-float WHEEL_DIAMETER = 64; //mm
-float LINEAR_SPEED_200 =  PI * (8/9.85) * WHEEL_DIAMETER; // in mms-1 at speed 200
+int STATE = 1; // 0: idle, 1: moving
+int MAIN_PATH_INDEX = 0;
+int CURRENT_BOX = 1;
 
-int16_t STATE = 1; // 0: idle, 1: moving
+enum DIRECTION {
+  STRAIGHT,
+  LEFT,
+  RIGHT,
+  TURNAROUND
+};
+
+enum ACTION {
+  NO_ACTION,
+  DEPOSIT,
+  PICKUP_ALONG_PATH, //for boxes on the line
+  SEARCH,
+};
 
 enum LINE_FOLLOW_STATE {
   CENTRAL, //front two white, side two black
@@ -30,30 +40,202 @@ enum LINE_FOLLOW_STATE {
   UNSURE // catch-all
 };
 
+enum NAVIGATION_STATE {
+  FOLLOWING_NODAL_PATH,
+  SEEKING_OBJECT,
+  LOST
+};
+
 struct JUNCTION {
   bool AHEAD;
   bool LEFT;
   bool RIGHT;
 };
 
-void setup() {
-  Serial.begin(9600);  
-  Serial.println("initialising the absolute bear minimum...");
-  
+struct PATHSTEP {
+    int nodeId;                  // Unique ID for each node
+    DIRECTION exitDirection;        // Direction the robot should take when leaving ("straight","left","right","TurnAroundUntilLine")
+    ACTION action;
+    bool boxVertical; // is the next box vertical?
+};
 
-  // motor initialisation
+struct RESULT {
+  bool USED;
+  bool MAGNETIC;
+};
 
-  if (!AFMS.begin()) {         // create with the default frequency 1.6KHz
-  // if (!AFMS.begin(1000)) {  // OR with a different frequency, say 1KHz
-    Serial.println("Could not find Motor Shield. Check wiring.");
-    while (1);
-  }
+static PATHSTEP main_path[] = {
+    // BOX1 NODE 2
+    {0, STRAIGHT, NO_ACTION, false},
+    // PICKUP BOX FUNCTION
+    {2, LEFT, NO_ACTION, false},
+    {1, RIGHT, NO_ACTION, false},
+    {4, STRAIGHT, NO_ACTION, false},
+    {12, RIGHT, PICKUP_ALONG_PATH, false},
+    // Magnetic (9) from 12
+    // Non Magnetic (10) from 12
+    // Drop Box
 
-  Serial.println("Motor Shield found.");
 
-  delay(5000); //so we can get some stuff done before the thing do
+    // BOX2 NODE 5
+    // PICKUP BOX FUNCTION
+    {5, TURNAROUND, PICKUP_ALONG_PATH, false},
+    // Magnetic (9) from 5
+    // Non Magnetic (10) from 5
+    // Drop Box
 
-}
+
+    // BOX3 NODE 6-5
+    {13, RIGHT, NO_ACTION, false},
+    {6, RIGHT, NO_ACTION, false},
+    // PICKUP BOX FUNCTION  
+    {5, RIGHT, PICKUP_ALONG_PATH, false},
+    // Magnetic (9) from 5
+    // Non Magnetic (10) from 5
+    // Drop Box
+
+
+    // BOX4 NODE 2-3
+    {13, RIGHT, NO_ACTION, false},
+    {6, STRAIGHT, NO_ACTION, false},
+    {3, RIGHT, NO_ACTION, false},
+    // PICKUP BOX FUNCTION
+    {2, STRAIGHT, NO_ACTION, false},
+    {1, RIGHT, NO_ACTION, false},
+    {4, STRAIGHT, NO_ACTION, false},
+    {12, RIGHT, PICKUP_ALONG_PATH, false},
+    // Magnetic (9) from 12
+    // Non Magnetic (10) from 12
+    // Drop Box
+
+
+    // BOX5 OFF NODE 6-5 LINE
+    {13, RIGHT, NO_ACTION, false},
+    {6, RIGHT, NO_ACTION, false},
+    // PICKUP BOX OFF LINE FUNCTION 
+    {5, RIGHT, SEARCH, false},
+    // Magnetic (9) from 5
+    // Non Magnetic (10) from 5
+    // Drop Box
+
+
+    // BOX6 OFF NODE 1-2 LINE
+    {12, LEFT, NO_ACTION, false},
+    {4, STRAIGHT, NO_ACTION, false},
+    {1, LEFT, NO_ACTION, false},
+    // PICKUP BOX OFF LINE FUNCTION
+    {2, STRAIGHT, NO_ACTION, false},
+    {3, LEFT, SEARCH, false},
+    // Magnetic (9) from 3 and back to start
+    // Non Magnetic (9) from 3 and back to start
+    // Drop Box
+};
+
+static PATHSTEP box1_magnetic[] = {
+    {7, RIGHT, NO_ACTION, false},
+    {11, RIGHT, NO_ACTION, false},
+    {9, TURNAROUND, NO_ACTION, false},
+    {11, RIGHT, NO_ACTION, false},
+};
+
+static PATHSTEP box1_nonMagnetic[] = {
+    {7, STRAIGHT, NO_ACTION, false},
+    {8, RIGHT, NO_ACTION, false},
+    {10, TURNAROUND, NO_ACTION, false},
+    {8, LEFT, NO_ACTION, false},
+    {7, LEFT, NO_ACTION, false},
+    {11, STRAIGHT, NO_ACTION, false}
+};
+
+static PATHSTEP box2_magnetic[] = {
+    {11, LEFT, NO_ACTION, false},
+    {9, TURNAROUND, NO_ACTION, false},
+    {11, LEFT, NO_ACTION, false},
+    {7, RIGHT, NO_ACTION, false},
+    {8, STRAIGHT, NO_ACTION, false},
+};
+
+static PATHSTEP box2_nonMagnetic[] = {
+    {11, STRAIGHT, NO_ACTION, false},
+    {7, RIGHT, NO_ACTION, false},
+    {8, RIGHT, NO_ACTION, false},
+    {10, TURNAROUND, NO_ACTION, false},
+    {8, RIGHT, NO_ACTION, false},
+};
+
+static PATHSTEP box3_magnetic[] = {
+    {11, LEFT, NO_ACTION, false},
+    {9, TURNAROUND, NO_ACTION, false},
+    {11, LEFT, NO_ACTION, false},
+    {7, RIGHT, NO_ACTION, false},
+    {8, STRAIGHT, NO_ACTION, false},
+    {13, RIGHT, NO_ACTION, false},
+};
+
+static PATHSTEP box3_nonMagnetic[] = {
+    {11, STRAIGHT, NO_ACTION, false},
+    {7, RIGHT, NO_ACTION, false},
+    {8, RIGHT, NO_ACTION, false},
+    {10, TURNAROUND, NO_ACTION, false},
+    {8, RIGHT, NO_ACTION, false},
+};
+
+static PATHSTEP box4_magnetic[] = {
+    {7, RIGHT, NO_ACTION, false},
+    {11, RIGHT, NO_ACTION, false},
+    {9, TURNAROUND, NO_ACTION, false},
+    {11, LEFT, NO_ACTION, false},
+    {7, RIGHT, NO_ACTION, false},
+    {8, STRAIGHT, NO_ACTION, false},
+};
+
+static PATHSTEP box4_nonMagnetic[] = {
+    {7, STRAIGHT, NO_ACTION, false},
+    {8, RIGHT, NO_ACTION, false},
+    {10, TURNAROUND, NO_ACTION, false},
+    {8, RIGHT, NO_ACTION, false},
+};
+
+static PATHSTEP box5_magnetic[] = {
+    {11, LEFT, NO_ACTION, false},
+    {9, TURNAROUND, NO_ACTION, false},
+    {11, LEFT, NO_ACTION, false},
+    {7, LEFT, NO_ACTION, false},
+};
+
+static PATHSTEP box5_nonMagnetic[] = {
+    {11, STRAIGHT, NO_ACTION, false},
+    {7, RIGHT, NO_ACTION, false},
+    {8, RIGHT, NO_ACTION, false},
+    {10, TURNAROUND, NO_ACTION, false},
+    {8, LEFT, NO_ACTION, false},
+    {7, STRAIGHT, NO_ACTION, false},
+};
+
+static PATHSTEP box6_magnetic[] = {
+    {6, LEFT, NO_ACTION, false},
+    {5, RIGHT, NO_ACTION, false},
+    {11, LEFT, NO_ACTION, false},
+    {9, TURNAROUND, NO_ACTION, false},
+    {11, RIGHT, NO_ACTION, false},
+    {5, RIGHT, NO_ACTION, false},
+    {4, LEFT, NO_ACTION, false},
+    {1, LEFT, NO_ACTION, false},
+    {2, RIGHT, NO_ACTION, false},
+};
+
+static PATHSTEP box6_nonMagnetic[] = {
+
+    {6, STRAIGHT, NO_ACTION, false},
+    {13, LEFT, NO_ACTION, false},
+    {8, LEFT, NO_ACTION, false},
+    {10, TURNAROUND, NO_ACTION, false},
+    {8, RIGHT, NO_ACTION, false},
+    {13, RIGHT, NO_ACTION, false},
+    {6, STRAIGHT, NO_ACTION, false},
+    {3, RIGHT, NO_ACTION, false},
+    {2, LEFT, NO_ACTION, false},
+};
 
 LINE_FOLLOW_STATE ReadLineFollowSensors () {
   bool wideLeftSensor = digitalRead(WIDE_LEFT_LINE_SENSOR_PIN); //typecast to bool where true is white and black is false
@@ -118,6 +300,41 @@ void StopDriving() {
   MotorRight->run(RELEASE);
 }
 
+void TurnAroundUntilLine(bool clockwise) {
+  double power = 200;
+  if (clockwise) {
+    MotorLeft->run(FORWARD);
+    MotorRight->run(BACKWARD);
+  } else {
+    MotorLeft->run(BACKWARD);
+    MotorRight->run(FORWARD);
+  }
+  MotorLeft->setSpeed(power);
+  MotorRight->setSpeed(power);
+  delay(1800);
+  bool turning = true;
+  while (turning) {
+    bool frontLeftSensor = digitalRead(FRONT_LEFT_LINE_SENSOR_PIN);
+    bool frontRightSensor = digitalRead(FRONT_RIGHT_LINE_SENSOR_PIN);
+    turning = !(frontLeftSensor and frontRightSensor);
+  };
+  StopDriving();
+};
+
+void TurnUntilLine(bool right) {
+  int16_t differential = right ? -100 : 100; //80 seems perfect for the right turn but the left turn is a bit crap
+  bool turning = true;
+  Drive(true, 200, differential);
+  delay(1500); //let's let it start the turn before we start checking the sensors to see if we're done
+  while (turning) {
+    bool frontLeftSensor = digitalRead(FRONT_LEFT_LINE_SENSOR_PIN);
+    bool frontRightSensor = digitalRead(FRONT_RIGHT_LINE_SENSOR_PIN);
+    Drive(true, 200, differential);
+    turning = !(frontLeftSensor and frontRightSensor);
+  };
+  StopDriving();  
+};
+
 JUNCTION LineFollowToJunction () {
   while (true) {
     LINE_FOLLOW_STATE followState = ReadLineFollowSensors();
@@ -143,63 +360,91 @@ JUNCTION LineFollowToJunction () {
   }
 }
 
-void TurnUntilLine(bool right) {
-  int16_t differential = right ? -80 : 80; //80 seems perfect for the right turn but the left turn is a bit crap
-  bool turning = true;
-  Drive(true, 200, differential);
-  delay(1500); //let's let it start the turn before we start checking the sensors to see if we're done
-  while (turning) {
-    bool frontLeftSensor = digitalRead(FRONT_LEFT_LINE_SENSOR_PIN);
-    bool frontRightSensor = digitalRead(FRONT_RIGHT_LINE_SENSOR_PIN);
-    Drive(true, 200, differential);
-    turning = !(frontLeftSensor and frontRightSensor);
+bool PickUpBox() { // returns true if the box is magnetic
+  CURRENT_BOX++;
+  return true;
+};
+
+RESULT ExecutePathStepAtJunction(PATHSTEP pathstep, JUNCTION junction) {
+  DIRECTION nextDirection = pathstep.exitDirection;
+  ACTION nextAction = pathstep.action;
+  if (nextDirection == STRAIGHT) {
+      Drive(true, 200, 0);
+      delay(500);
+  } else if (nextDirection == LEFT) {
+      TurnUntilLine(false);
+  } else if (nextDirection == RIGHT) {
+      TurnUntilLine(true);
+  } else if (nextDirection == TURNAROUND){
+      TurnAroundUntilLine(true);
+  } else { // something has gone badly wrong
+      StopDriving();
+      STATE = 0;
+  }
+  if ((nextAction == SEARCH) or (nextAction == PICKUP_ALONG_PATH)) {
+    bool boxMagnetic = PickUpBox();
+    return {true, boxMagnetic};
   };
-  StopDriving();  
+  return {false, false};
 };
 
-struct PATHSTEP {
-    int nodeId;                  // Unique ID for each node
-    String exitDirection;        // Direction the robot should take when leaving ("straight","left","right","turnaround")
-};
+void ExecuteSubPath (PATHSTEP* SubPath) {
+  for (int SUB_PATH_INDEX = 0; SUB_PATH_INDEX < sizeof(SubPath); SUB_PATH_INDEX++) {
+    JUNCTION NewJunction = LineFollowToJunction();
+    PATHSTEP NextPathStep = *(SubPath + SUB_PATH_INDEX);
+    RESULT result = ExecutePathStepAtJunction(NextPathStep, NewJunction);
+  }
+}
 
-PATHSTEP sample_path[] = {
-    {2, "straight"},
-    {1, "right"},
-    {4, "right"},
-    {5, "left"},
-    {11, "straight"},
-    {7, "right"},
-    {8, "straight"},
-    {13, "right"},
-    {6, "right"},
-    {5, "straight"},
-    {4, "left"},
-    {1, "left"},
-    {2, "straight"},
-};
+void setup() {
+  Serial.begin(9600);  
+  Serial.println("initialising the absolute bear minimum...");
+  
 
-int currentNode = 0;
+  // motor initialisation
+  if (!AFMS.begin()) {         // create with the default frequency 1.6KHz
+  // if (!AFMS.begin(1000)) {  // OR with a different frequency, say 1KHz
+    Serial.println("Could not find Motor Shield. Check wiring.");
+    while (1);
+  }
+
+  Serial.println("Motor Shield found.");
+
+  delay(5000); //so we can get some stuff done before the thing do
+
+}
 
 void loop() {
   if (STATE == 1) {
-    JUNCTION junction = LineFollowToJunction();
+    JUNCTION newJunction = LineFollowToJunction();
+    PATHSTEP nextPathstep = main_path[MAIN_PATH_INDEX];
+    RESULT Result = ExecutePathStepAtJunction(nextPathstep, newJunction);
+
+    if (Result.USED) {
+      switch (CURRENT_BOX) {
+        case 1:
+          Result.MAGNETIC ? ExecuteSubPath(box1_magnetic) : ExecuteSubPath(box1_nonMagnetic);
+          break;
+        case 2:
+          Result.MAGNETIC ? ExecuteSubPath(box2_magnetic) : ExecuteSubPath(box2_nonMagnetic);
+          break;
+        case 3:
+          Result.MAGNETIC ? ExecuteSubPath(box3_magnetic) : ExecuteSubPath(box3_nonMagnetic);
+          break;
+        case 4:
+          Result.MAGNETIC ? ExecuteSubPath(box4_magnetic) : ExecuteSubPath(box4_nonMagnetic);
+          break;
+        case 5:
+          Result.MAGNETIC ? ExecuteSubPath(box5_magnetic) : ExecuteSubPath(box5_nonMagnetic);
+          break;
+        case 6:
+          Result.MAGNETIC ? ExecuteSubPath(box6_magnetic) : ExecuteSubPath(box6_nonMagnetic);
+          break;
+      }
+    };
+
     delay(1000);
-    String nextAction = sample_path[currentNode].exitDirection;
-    if (nextAction == "straight") {
-      Drive(true, 200, 0);
-      Serial.println("goin' straight");
-      delay(500);
-    } else if (nextAction == "left") {
-      Serial.println("turnin' left");
-      TurnUntilLine(false);
-    } else if (nextAction == "right") {
-      Serial.println("turnin' right");
-      TurnUntilLine(true);
-    }
-    currentNode++;
-    delay(1000);
-    if (currentNode > 12) {
-      STATE = 0;
-    }
+
+    MAIN_PATH_INDEX++;
   }
 }
