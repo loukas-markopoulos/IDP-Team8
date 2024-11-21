@@ -30,11 +30,11 @@
 #include <Arduino.h>
 #include <Servo.h>
 
-Servo verticalServo;            // controls the height of the claw (0deg in vertical position)
-Servo clawServo;                // controls opening and closing of the claw (0deg in closed position)
+Servo verticalServo;            // initialise servo that controls the height of the claw (0deg in vertical position)
+Servo clawServo;                // initialise servo that controls opening and closing of the claw (0deg in closed position)
 
-const int trigPin = ;
-const int echoPin= ;
+const int trigPin = ;           // ENTER PIN FOR TRIGGER
+const int echoPin= ;            // ENTER PIN FOR ECHO
 
 void setup() {
     verticalServo.attach(9);
