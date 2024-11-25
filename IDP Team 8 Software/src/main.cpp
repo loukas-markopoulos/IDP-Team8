@@ -15,9 +15,9 @@ int8_t WIDE_LEFT_LINE_SENSOR_PIN = 12;
 int8_t FRONT_RIGHT_LINE_SENSOR_PIN = 11;
 int8_t FRONT_LEFT_LINE_SENSOR_PIN = 10;
 
-int STATE = 1; // 0: idle, 1: moving
-int MAIN_PATH_INDEX = 0;
-int CURRENT_BOX = 1;
+int8_t NAVIGATION_STATE = 0;
+
+bool LAST_BOX_MAGNETIC = true;
 
 enum DIRECTION {
   STRAIGHT,
@@ -28,9 +28,11 @@ enum DIRECTION {
 
 enum ACTION {
   NO_ACTION,
-  DEPOSIT,
+  //along path actions:
   PICKUP_ALONG_PATH, //for boxes on the line
   SEARCH,
+  //end of path actions:
+  DEPOSIT,
 };
 
 enum LINE_FOLLOW_STATE {
@@ -38,12 +40,6 @@ enum LINE_FOLLOW_STATE {
   LINE_TO_RIGHT, //front right white, front left black, side two black
   LINE_TO_LEFT, //front left white, front right black, side two black
   UNSURE // catch-all
-};
-
-enum NAVIGATION_STATE {
-  FOLLOWING_NODAL_PATH,
-  SEEKING_OBJECT,
-  LOST
 };
 
 struct JUNCTION {
@@ -54,188 +50,195 @@ struct JUNCTION {
 
 struct PATHSTEP {
     int nodeId;                  // Unique ID for each node
-    DIRECTION exitDirection;        // Direction the robot should take when leaving ("straight","left","right","TurnAroundUntilLine")
-    ACTION action;
-    bool boxVertical; // is the next box vertical?
+    DIRECTION EXIT_DIRECTION;
+    ACTION DURING_PATH_ACTION;
+    ACTION END_PATH_ACTION;
+    int EXPECTED_TIME; //in seconds i guess
 };
 
-struct RESULT {
-  bool USED;
-  bool MAGNETIC;
-};
-
-static PATHSTEP main_path[] = {
+static PATHSTEP main_path_0[5] = {
     // BOX1 NODE 2
-    {0, STRAIGHT, NO_ACTION, false},
-    // PICKUP BOX FUNCTION
-    {2, LEFT, NO_ACTION, false},
-    {1, RIGHT, NO_ACTION, false},
-    {4, STRAIGHT, NO_ACTION, false},
-    {12, RIGHT, PICKUP_ALONG_PATH, false},
-    // Magnetic (9) from 12
-    // Non Magnetic (10) from 12
-    // Drop Box
+  {0, STRAIGHT, PICKUP_ALONG_PATH, NO_ACTION, 0},
+  // PICKUP BOX FUNCTION
+  {2, LEFT, NO_ACTION, NO_ACTION, 0},
+  {1, RIGHT, NO_ACTION, NO_ACTION, 0},
+  {4, STRAIGHT, NO_ACTION, NO_ACTION, 0},
+  {12, RIGHT, PICKUP_ALONG_PATH, NO_ACTION, 0},
+  // Magnetic (9) from 12
+  // Non Magnetic (10) from 12
+  // Drop Box
+};
 
-
-    // BOX2 NODE 5
+static PATHSTEP main_path_1[1] = {
+ // BOX2 NODE 5
     // PICKUP BOX FUNCTION
-    {5, TURNAROUND, PICKUP_ALONG_PATH, false},
+    {5, TURNAROUND, PICKUP_ALONG_PATH, NO_ACTION, 0},
     // Magnetic (9) from 5
     // Non Magnetic (10) from 5
     // Drop Box
 
+};
 
-    // BOX3 NODE 6-5
-    {13, RIGHT, NO_ACTION, false},
-    {6, RIGHT, NO_ACTION, false},
+static PATHSTEP main_path_2[3] = {
+ // BOX3 NODE 6-5
+    {13, RIGHT, NO_ACTION, NO_ACTION, 0},
+    {6, RIGHT, NO_ACTION, NO_ACTION, 0},
     // PICKUP BOX FUNCTION  
-    {5, RIGHT, PICKUP_ALONG_PATH, false},
+    {5, RIGHT, PICKUP_ALONG_PATH, NO_ACTION, 0},
     // Magnetic (9) from 5
     // Non Magnetic (10) from 5
     // Drop Box
 
 
-    // BOX4 NODE 2-3
-    {13, RIGHT, NO_ACTION, false},
-    {6, STRAIGHT, NO_ACTION, false},
-    {3, RIGHT, NO_ACTION, false},
+};
+
+static PATHSTEP main_path_3[7] = {
+     // BOX4 NODE 2-3
+    {13, RIGHT, NO_ACTION, NO_ACTION, 0},
+    {6, STRAIGHT, NO_ACTION, NO_ACTION, 0},
+    {3, RIGHT, NO_ACTION, NO_ACTION, 0},
     // PICKUP BOX FUNCTION
-    {2, STRAIGHT, NO_ACTION, false},
-    {1, RIGHT, NO_ACTION, false},
-    {4, STRAIGHT, NO_ACTION, false},
-    {12, RIGHT, PICKUP_ALONG_PATH, false},
+    {2, STRAIGHT, NO_ACTION, NO_ACTION, 0},
+    {1, RIGHT, NO_ACTION, NO_ACTION, 0},
+    {4, STRAIGHT, NO_ACTION, NO_ACTION, 0},
+    {12, RIGHT, PICKUP_ALONG_PATH, NO_ACTION, 0},
     // Magnetic (9) from 12
     // Non Magnetic (10) from 12
     // Drop Box
+};
 
+static PATHSTEP main_path_4[3] = {
 
     // BOX5 OFF NODE 6-5 LINE
-    {13, RIGHT, NO_ACTION, false},
-    {6, RIGHT, NO_ACTION, false},
+    {13, RIGHT, NO_ACTION, NO_ACTION, 0},
+    {6, RIGHT, NO_ACTION, NO_ACTION, 0},
     // PICKUP BOX OFF LINE FUNCTION 
-    {5, RIGHT, SEARCH, false},
+    {5, RIGHT, SEARCH, NO_ACTION, 0},
     // Magnetic (9) from 5
     // Non Magnetic (10) from 5
     // Drop Box
+ 
+};
 
-
-    // BOX6 OFF NODE 1-2 LINE
-    {12, LEFT, NO_ACTION, false},
-    {4, STRAIGHT, NO_ACTION, false},
-    {1, LEFT, NO_ACTION, false},
+static PATHSTEP main_path_5[5] = {
+      // BOX6 OFF NODE 1-2 LINE
+    {12, LEFT, NO_ACTION, NO_ACTION, 0},
+    {4, STRAIGHT, NO_ACTION, NO_ACTION, 0},
+    {1, LEFT, NO_ACTION, NO_ACTION, 0},
     // PICKUP BOX OFF LINE FUNCTION
-    {2, STRAIGHT, NO_ACTION, false},
-    {3, LEFT, SEARCH, false},
+    {2, STRAIGHT, NO_ACTION, NO_ACTION, 0},
+    {3, LEFT, SEARCH, NO_ACTION, 0},
     // Magnetic (9) from 3 and back to start
     // Non Magnetic (9) from 3 and back to start
     // Drop Box
 };
 
-static PATHSTEP box1_magnetic[] = {
-    {7, RIGHT, NO_ACTION, false},
-    {11, RIGHT, NO_ACTION, false},
-    {9, TURNAROUND, NO_ACTION, false},
-    {11, RIGHT, NO_ACTION, false},
+static PATHSTEP box1_magnetic[4] = {
+    {7, RIGHT, NO_ACTION, NO_ACTION, 0},
+    {11, RIGHT, NO_ACTION, NO_ACTION, 0},
+    {9, TURNAROUND, NO_ACTION, NO_ACTION, 0},
+    {11, RIGHT, NO_ACTION, NO_ACTION, 0},
 };
 
-static PATHSTEP box1_nonMagnetic[] = {
-    {7, STRAIGHT, NO_ACTION, false},
-    {8, RIGHT, NO_ACTION, false},
-    {10, TURNAROUND, NO_ACTION, false},
-    {8, LEFT, NO_ACTION, false},
-    {7, LEFT, NO_ACTION, false},
-    {11, STRAIGHT, NO_ACTION, false}
+static PATHSTEP box1_nonMagnetic[6] = {
+    {7, STRAIGHT, NO_ACTION, NO_ACTION, 0},
+    {8, RIGHT, NO_ACTION, NO_ACTION, 0},
+    {10, TURNAROUND, NO_ACTION, NO_ACTION, 0},
+    {8, LEFT, NO_ACTION, NO_ACTION, 0},
+    {7, LEFT, NO_ACTION, NO_ACTION, 0},
+    {11, STRAIGHT, NO_ACTION, NO_ACTION, 0}
 };
 
-static PATHSTEP box2_magnetic[] = {
-    {11, LEFT, NO_ACTION, false},
-    {9, TURNAROUND, NO_ACTION, false},
-    {11, LEFT, NO_ACTION, false},
-    {7, RIGHT, NO_ACTION, false},
-    {8, STRAIGHT, NO_ACTION, false},
+static PATHSTEP box2_magnetic[5] = {
+    {11, LEFT, NO_ACTION, NO_ACTION, 0},
+    {9, TURNAROUND, NO_ACTION, NO_ACTION, 0},
+    {11, LEFT, NO_ACTION, NO_ACTION, 0},
+    {7, RIGHT, NO_ACTION, NO_ACTION, 0},
+    {8, STRAIGHT, NO_ACTION, NO_ACTION, 0},
 };
 
-static PATHSTEP box2_nonMagnetic[] = {
-    {11, STRAIGHT, NO_ACTION, false},
-    {7, RIGHT, NO_ACTION, false},
-    {8, RIGHT, NO_ACTION, false},
-    {10, TURNAROUND, NO_ACTION, false},
-    {8, RIGHT, NO_ACTION, false},
+static PATHSTEP box2_nonMagnetic[5] = {
+    {11, STRAIGHT, NO_ACTION, NO_ACTION, 0},
+    {7, RIGHT, NO_ACTION, NO_ACTION, 0},
+    {8, RIGHT, NO_ACTION, NO_ACTION, 0},
+    {10, TURNAROUND, NO_ACTION, NO_ACTION, 0},
+    {8, RIGHT, NO_ACTION, NO_ACTION, 0},
 };
 
-static PATHSTEP box3_magnetic[] = {
-    {11, LEFT, NO_ACTION, false},
-    {9, TURNAROUND, NO_ACTION, false},
-    {11, LEFT, NO_ACTION, false},
-    {7, RIGHT, NO_ACTION, false},
-    {8, STRAIGHT, NO_ACTION, false},
-    {13, RIGHT, NO_ACTION, false},
+static PATHSTEP box3_magnetic[6] = {
+    {11, LEFT, NO_ACTION, NO_ACTION, 0},
+    {9, TURNAROUND, NO_ACTION, NO_ACTION, 0},
+    {11, LEFT, NO_ACTION, NO_ACTION, 0},
+    {7, RIGHT, NO_ACTION, NO_ACTION, 0},
+    {8, STRAIGHT, NO_ACTION, NO_ACTION, 0},
+    {13, RIGHT, NO_ACTION, NO_ACTION, 0},
 };
 
-static PATHSTEP box3_nonMagnetic[] = {
-    {11, STRAIGHT, NO_ACTION, false},
-    {7, RIGHT, NO_ACTION, false},
-    {8, RIGHT, NO_ACTION, false},
-    {10, TURNAROUND, NO_ACTION, false},
-    {8, RIGHT, NO_ACTION, false},
+static PATHSTEP box3_nonMagnetic[5] = {
+    {11, STRAIGHT, NO_ACTION, NO_ACTION, 0},
+    {7, RIGHT, NO_ACTION, NO_ACTION, 0},
+    {8, RIGHT, NO_ACTION, NO_ACTION, 0},
+    {10, TURNAROUND, NO_ACTION, NO_ACTION, 0},
+    {8, RIGHT, NO_ACTION, NO_ACTION, 0},
 };
 
-static PATHSTEP box4_magnetic[] = {
-    {7, RIGHT, NO_ACTION, false},
-    {11, RIGHT, NO_ACTION, false},
-    {9, TURNAROUND, NO_ACTION, false},
-    {11, LEFT, NO_ACTION, false},
-    {7, RIGHT, NO_ACTION, false},
-    {8, STRAIGHT, NO_ACTION, false},
+static PATHSTEP box4_magnetic[6] = {
+    {7, RIGHT, NO_ACTION, NO_ACTION, 0},
+    {11, RIGHT, NO_ACTION, NO_ACTION, 0},
+    {9, TURNAROUND, NO_ACTION, NO_ACTION, 0},
+    {11, LEFT, NO_ACTION, NO_ACTION, 0},
+    {7, RIGHT, NO_ACTION, NO_ACTION, 0},
+    {8, STRAIGHT, NO_ACTION, NO_ACTION, 0},
 };
 
-static PATHSTEP box4_nonMagnetic[] = {
-    {7, STRAIGHT, NO_ACTION, false},
-    {8, RIGHT, NO_ACTION, false},
-    {10, TURNAROUND, NO_ACTION, false},
-    {8, RIGHT, NO_ACTION, false},
+static PATHSTEP box4_nonMagnetic[4] = {
+    {7, STRAIGHT, NO_ACTION, NO_ACTION, 0},
+    {8, RIGHT, NO_ACTION, NO_ACTION, 0},
+    {10, TURNAROUND, NO_ACTION, NO_ACTION, 0},
+    {8, RIGHT, NO_ACTION, NO_ACTION, 0},
 };
 
-static PATHSTEP box5_magnetic[] = {
-    {11, LEFT, NO_ACTION, false},
-    {9, TURNAROUND, NO_ACTION, false},
-    {11, LEFT, NO_ACTION, false},
-    {7, LEFT, NO_ACTION, false},
+static PATHSTEP box5_magnetic[3] = {
+    {9, TURNAROUND, NO_ACTION, NO_ACTION, 0},
+    {11, LEFT, NO_ACTION, NO_ACTION, 0},
+    {7, LEFT, NO_ACTION, NO_ACTION, 0},
 };
 
-static PATHSTEP box5_nonMagnetic[] = {
-    {11, STRAIGHT, NO_ACTION, false},
-    {7, RIGHT, NO_ACTION, false},
-    {8, RIGHT, NO_ACTION, false},
-    {10, TURNAROUND, NO_ACTION, false},
-    {8, LEFT, NO_ACTION, false},
-    {7, STRAIGHT, NO_ACTION, false},
+static PATHSTEP box5_nonMagnetic[6] = {
+    {11, STRAIGHT, NO_ACTION, NO_ACTION, 0},
+    {7, RIGHT, NO_ACTION, NO_ACTION, 0},
+    {8, RIGHT, NO_ACTION, NO_ACTION, 0},
+    {10, TURNAROUND, NO_ACTION, NO_ACTION, 0},
+    {8, LEFT, NO_ACTION, NO_ACTION, 0},
+    {7, STRAIGHT, NO_ACTION, NO_ACTION, 0},
 };
 
-static PATHSTEP box6_magnetic[] = {
-    {6, LEFT, NO_ACTION, false},
-    {5, RIGHT, NO_ACTION, false},
-    {11, LEFT, NO_ACTION, false},
-    {9, TURNAROUND, NO_ACTION, false},
-    {11, RIGHT, NO_ACTION, false},
-    {5, RIGHT, NO_ACTION, false},
-    {4, LEFT, NO_ACTION, false},
-    {1, LEFT, NO_ACTION, false},
-    {2, RIGHT, NO_ACTION, false},
+static PATHSTEP box6_magnetic[10] = {
+    {6, LEFT, NO_ACTION, NO_ACTION, 0},
+    {5, RIGHT, NO_ACTION, NO_ACTION, 0},
+    {11, LEFT, NO_ACTION, NO_ACTION, 0},
+    {9, TURNAROUND, NO_ACTION, NO_ACTION, 0},
+    {11, RIGHT, NO_ACTION, NO_ACTION, 0},
+    {5, RIGHT, NO_ACTION, NO_ACTION, 0},
+    {4, LEFT, NO_ACTION, NO_ACTION, 0},
+    {1, LEFT, NO_ACTION, NO_ACTION, 0},
+    {2, RIGHT, NO_ACTION, NO_ACTION, 0},
 };
 
-static PATHSTEP box6_nonMagnetic[] = {
+static PATHSTEP box6_nonMagnetic[9] = {
 
-    {6, STRAIGHT, NO_ACTION, false},
-    {13, LEFT, NO_ACTION, false},
-    {8, LEFT, NO_ACTION, false},
-    {10, TURNAROUND, NO_ACTION, false},
-    {8, RIGHT, NO_ACTION, false},
-    {13, RIGHT, NO_ACTION, false},
-    {6, STRAIGHT, NO_ACTION, false},
-    {3, RIGHT, NO_ACTION, false},
-    {2, LEFT, NO_ACTION, false},
+    {6, STRAIGHT, NO_ACTION, NO_ACTION, 0},
+    {13, LEFT, NO_ACTION, NO_ACTION, 0},
+    {8, LEFT, NO_ACTION, NO_ACTION, 0},
+    {10, TURNAROUND, NO_ACTION, NO_ACTION, 0},
+    {8, RIGHT, NO_ACTION, NO_ACTION, 0},
+    {13, RIGHT, NO_ACTION, NO_ACTION, 0},
+    {6, STRAIGHT, NO_ACTION, NO_ACTION, 0},
+    {3, RIGHT, NO_ACTION, NO_ACTION, 0},
+    {2, LEFT, NO_ACTION, NO_ACTION, 0},
 };
+
+//AWARENESS FUNCTIONS
 
 LINE_FOLLOW_STATE ReadLineFollowSensors () {
   bool wideLeftSensor = digitalRead(WIDE_LEFT_LINE_SENSOR_PIN); //typecast to bool where true is white and black is false
@@ -275,6 +278,8 @@ JUNCTION AssessJunction () {
 
   return JUNCTION{ahead_loc, left_loc, right_loc};
 }
+
+//BASE MOVEMENT FUNCTIONS
 
 void Drive(bool forward, int16_t speed, double differential) { // speed is an int from 0-255, differential is a percentage difference between the two motors with +ve turning left and -ve turning right.
   if (forward) {
@@ -335,7 +340,9 @@ void TurnUntilLine(bool right) {
   StopDriving();  
 };
 
-JUNCTION LineFollowToJunction () {
+//ALONG-PATH FUNCTIONS
+
+void LineFollowToJunction (int time) {
   while (true) {
     LINE_FOLLOW_STATE followState = ReadLineFollowSensors();
     switch (followState)
@@ -352,49 +359,38 @@ JUNCTION LineFollowToJunction () {
       Drive(true, 200, -22);;
       break;
 
-    case UNSURE:
+    case UNSURE: //ok we're either at a junction or have fallen off the line. TODO write the rest of the fn code haha
       StopDriving();
-      JUNCTION NewJunction = AssessJunction();  
-      return NewJunction;
+      //more code here to check for false junctioning
+      break;
     }   
   }
 }
 
-bool PickUpBox() { // returns true if the box is magnetic
-  CURRENT_BOX++;
-  return true;
+bool PickUpBoxAlongLine(int time) { //true if magnetic
+  LineFollowToJunction(time);
+  return true; //oh wow it was magnetic, could never have guessed...
 };
 
-RESULT ExecutePathStepAtJunction(PATHSTEP pathstep, JUNCTION junction) {
-  DIRECTION nextDirection = pathstep.exitDirection;
-  ACTION nextAction = pathstep.action;
-  if (nextDirection == STRAIGHT) {
+//TODO: END-PATH FUNCTIONS
+
+//TURN AT END OF JUNCTION
+
+void TurnAtJunction(DIRECTION direction, JUNCTION junction) {
+  if (direction == STRAIGHT and junction.AHEAD) {
       Drive(true, 200, 0);
       delay(500);
-  } else if (nextDirection == LEFT) {
+  } else if (direction == LEFT and junction.LEFT) {
       TurnUntilLine(false);
-  } else if (nextDirection == RIGHT) {
+  } else if (direction == RIGHT and junction.RIGHT) {
       TurnUntilLine(true);
-  } else if (nextDirection == TURNAROUND){
+  } else if (direction == TURNAROUND){
       TurnAroundUntilLine(true);
-  } else { // something has gone badly wrong
+  } else { // something has gone badly wrong aaaaaahhhhhhhhhhhh
       StopDriving();
-      STATE = 0;
+      //screamIntoVoid();
   }
-  if ((nextAction == SEARCH) or (nextAction == PICKUP_ALONG_PATH)) {
-    bool boxMagnetic = PickUpBox();
-    return {true, boxMagnetic};
-  };
-  return {false, false};
 };
-
-void ExecuteSubPath (PATHSTEP* SubPath) {
-  for (int SUB_PATH_INDEX = 0; SUB_PATH_INDEX < sizeof(SubPath); SUB_PATH_INDEX++) {
-    JUNCTION NewJunction = LineFollowToJunction();
-    PATHSTEP NextPathStep = *(SubPath + SUB_PATH_INDEX);
-    RESULT result = ExecutePathStepAtJunction(NextPathStep, NewJunction);
-  }
-}
 
 void setup() {
   Serial.begin(9600);  
@@ -411,40 +407,55 @@ void setup() {
   Serial.println("Motor Shield found.");
 
   delay(5000); //so we can get some stuff done before the thing do
+}
 
+void ExecutePathSection(PATHSTEP NextSection[], int PathLength) {
+  for (int step = 0; step < PathLength; step++) {
+    //LIFECYCLE START
+    PATHSTEP NextPathStep = NextSection[step];
+    //DURING LINE ACTIONS
+    switch (NextPathStep.DURING_PATH_ACTION) {
+      case NO_ACTION:
+        LineFollowToJunction(NextPathStep.EXPECTED_TIME);
+        break;
+      case PICKUP_ALONG_PATH:
+        LAST_BOX_MAGNETIC = PickUpBoxAlongLine(NextPathStep.EXPECTED_TIME);
+        break;
+    };
+    //END OF LINE ACTIONS
+    // switch (NextPathStep.END_PATH_ACTION) {
+    //   case NO_ACTION:
+    //     break;
+    //   case default:
+    //   //more stuff will eventually go here
+    //   break;
+    // };
+    // CHECK JUNCTION AND TURN
+    JUNCTION NextJunction = AssessJunction();
+    TurnAtJunction(NextPathStep.EXIT_DIRECTION, NextJunction);
+    //LIFECYCLE END
+  };
 }
 
 void loop() {
-  if (STATE == 1) {
-    JUNCTION newJunction = LineFollowToJunction();
-    PATHSTEP nextPathstep = main_path[MAIN_PATH_INDEX];
-    RESULT Result = ExecutePathStepAtJunction(nextPathstep, newJunction);
 
-    if (Result.USED) {
-      switch (CURRENT_BOX) {
-        case 1:
-          Result.MAGNETIC ? ExecuteSubPath(box1_magnetic) : ExecuteSubPath(box1_nonMagnetic);
-          break;
-        case 2:
-          Result.MAGNETIC ? ExecuteSubPath(box2_magnetic) : ExecuteSubPath(box2_nonMagnetic);
-          break;
-        case 3:
-          Result.MAGNETIC ? ExecuteSubPath(box3_magnetic) : ExecuteSubPath(box3_nonMagnetic);
-          break;
-        case 4:
-          Result.MAGNETIC ? ExecuteSubPath(box4_magnetic) : ExecuteSubPath(box4_nonMagnetic);
-          break;
-        case 5:
-          Result.MAGNETIC ? ExecuteSubPath(box5_magnetic) : ExecuteSubPath(box5_nonMagnetic);
-          break;
-        case 6:
-          Result.MAGNETIC ? ExecuteSubPath(box6_magnetic) : ExecuteSubPath(box6_nonMagnetic);
-          break;
-      }
-    };
+  //CHOOSE PATH SECTION
 
-    delay(1000);
+  switch (NAVIGATION_STATE) {
+    case 1:
+      ExecutePathSection(main_path_0, 5);
+      break;
+    case 2:
+      LAST_BOX_MAGNETIC ? ExecutePathSection(box1_magnetic, 4) : ExecutePathSection(box1_nonMagnetic, 6);
+      break;
+    case 3:
+      ExecutePathSection(main_path_1, 1);
+      break;
+    default:
+      StopDriving();
+      //youreDone();
+      break;
+  };
 
-    MAIN_PATH_INDEX++;
-  }
+  NAVIGATION_STATE++;
 }

@@ -1,0 +1,66 @@
+static PATHSTEP main_path[] = {
+    // BOX1 NODE 2
+    {0, STRAIGHT, PICKUP_ALONG_PATH, NO_ACTION, 0},
+    // PICKUP BOX FUNCTION
+    {2, LEFT, NO_ACTION, NO_ACTION, 0},
+    {1, RIGHT, NO_ACTION, NO_ACTION, 0},
+    {4, STRAIGHT, NO_ACTION, NO_ACTION, 0},
+    {12, RIGHT, PICKUP_ALONG_PATH, NO_ACTION, 0},
+    // Magnetic (9) from 12
+    // Non Magnetic (10) from 12
+    // Drop Box
+
+
+    // BOX2 NODE 5
+    // PICKUP BOX FUNCTION
+    {5, TURNAROUND, PICKUP_ALONG_PATH, NO_ACTION, 0},
+    // Magnetic (9) from 5
+    // Non Magnetic (10) from 5
+    // Drop Box
+
+
+    // BOX3 NODE 6-5
+    {13, RIGHT, NO_ACTION, NO_ACTION, 0},
+    {6, RIGHT, NO_ACTION, NO_ACTION, 0},
+    // PICKUP BOX FUNCTION  
+    {5, RIGHT, PICKUP_ALONG_PATH, NO_ACTION, 0},
+    // Magnetic (9) from 5
+    // Non Magnetic (10) from 5
+    // Drop Box
+
+
+    // BOX4 NODE 2-3
+    {13, RIGHT, NO_ACTION, NO_ACTION, 0},
+    {6, STRAIGHT, NO_ACTION, NO_ACTION, 0},
+    {3, RIGHT, NO_ACTION, NO_ACTION, 0},
+    // PICKUP BOX FUNCTION
+    {2, STRAIGHT, NO_ACTION, NO_ACTION, 0},
+    {1, RIGHT, NO_ACTION, NO_ACTION, 0},
+    {4, STRAIGHT, NO_ACTION, NO_ACTION, 0},
+    {12, RIGHT, PICKUP_ALONG_PATH, NO_ACTION, 0},
+    // Magnetic (9) from 12
+    // Non Magnetic (10) from 12
+    // Drop Box
+
+
+    // BOX5 OFF NODE 6-5 LINE
+    {13, RIGHT, NO_ACTION, NO_ACTION, 0},
+    {6, RIGHT, NO_ACTION, NO_ACTION, 0},
+    // PICKUP BOX OFF LINE FUNCTION 
+    {5, RIGHT, SEARCH, NO_ACTION, 0},
+    // Magnetic (9) from 5
+    // Non Magnetic (10) from 5
+    // Drop Box
+
+
+    // BOX6 OFF NODE 1-2 LINE
+    {12, LEFT, NO_ACTION, NO_ACTION, 0},
+    {4, STRAIGHT, NO_ACTION, NO_ACTION, 0},
+    {1, LEFT, NO_ACTION, NO_ACTION, 0},
+    // PICKUP BOX OFF LINE FUNCTION
+    {2, STRAIGHT, NO_ACTION, NO_ACTION, 0},
+    {3, LEFT, SEARCH, NO_ACTION, 0},
+    // Magnetic (9) from 3 and back to start
+    // Non Magnetic (9) from 3 and back to start
+    // Drop Box
+};
