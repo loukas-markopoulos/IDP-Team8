@@ -34,7 +34,7 @@ Servo verticalServo;            // initialise servo that controls the height of 
 Servo clawServo;                // initialise servo that controls opening and closing of the claw (0deg in closed position)
 
 const int trigPin = ;           // ENTER PIN FOR TRIGGER
-const int echoPin= ;            // ENTER PIN FOR ECHO
+const int echoPin = ;           // ENTER PIN FOR ECHO
 
 void setup() {
     verticalServo.attach(9);
@@ -45,18 +45,21 @@ void setup() {
 }
 
 void pickup() {
-    // clawServo open whilst in vertical position
+    // NOTE: careful with absolute values of angles, need to first know reference angles
+    // alternatively, can use .read() to get current angle then add 90, but this may introduce (cumulative) error
+    
+    // open clawServo whilst in vertical position
     clawServo.write(90);        // CHANGE ANGLE FOR GEAR RATIO
     delay(1000);
     // verticalServo lowers claw
     verticalServo.write(90);    // should be exactly 90
     delay(1000);
-    // clawServo grabs box 
+    // clawServo closes to grab box 
     clawServo.write(0);
     delay(1000);
     // vertical servo raises claw
     verticalServo.write(0);
-    delay(1000);                // then take current reading (for weight)
+    delay(1000);                // then implement code to take current reading (for weight)
 }
 
 double returnDistance() {
