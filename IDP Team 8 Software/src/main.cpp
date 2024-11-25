@@ -397,22 +397,23 @@ bool PickUpBoxAlongLine(int time) { //true if magnetic
 //TURN AT END OF JUNCTION
 
 void TurnAtJunction(DIRECTION direction, JUNCTION junction) {
-  if (direction == STRAIGHT and junction.AHEAD) {
+  if (direction == STRAIGHT) {
       Serial.println("I've found a STRAIGHT, been told to take it, and i'm taking it!");
       Drive(true, 200, 0);
       delay(500);
-  } else if (direction == LEFT and junction.LEFT) {
+  } else if (direction == LEFT) {
       Serial.println("I've found a RIGHT turn, been told to take it, and i'm taking it!");
       TurnUntilLine(false);
-  } else if (direction == RIGHT and junction.RIGHT) {
+  } else if (direction == RIGHT) {
       Serial.println("I've found a RIGHT turn, been told to take it, and i'm taking it!");
       TurnUntilLine(true);
   } else if (direction == TURNAROUND){
+      Serial.println("i'm backing that ass up and turning around");
       TurnAroundUntilLine(true);
   } else { // something has gone badly wrong aaaaaahhhhhhhhhhhh
-      while true {
+      while (true) {
         StopDriving();
-        Serial.println("I am freaking the fuck out!!!!");
+        Serial.println("I am freaking out!!!!");
       }
       //screamIntoVoid();
   }
@@ -445,6 +446,10 @@ void ExecutePathSection(PATHSTEP NextSection[], int PathLength) {
     Serial.print(" turning ");
     Serial.println(NextPathStep.EXIT_DIRECTION);
 
+    // CHECK JUNCTION AND TURN
+    JUNCTION NextJunction = AssessJunction();
+    TurnAtJunction(NextPathStep.EXIT_DIRECTION, NextJunction);
+
     //DURING LINE ACTIONS
     switch (NextPathStep.DURING_PATH_ACTION) {
       case NO_ACTION:
@@ -457,7 +462,9 @@ void ExecutePathSection(PATHSTEP NextSection[], int PathLength) {
         LAST_BOX_MAGNETIC ? Serial.println("The box was magnetic!") : Serial.println("The box wasn't magnetic!");
         break;
     };
+
     //END OF LINE ACTIONS
+
     // switch (NextPathStep.END_PATH_ACTION) {
     //   case NO_ACTION:
     //     break;
@@ -465,9 +472,7 @@ void ExecutePathSection(PATHSTEP NextSection[], int PathLength) {
     //   //more stuff will eventually go here
     //   break;
     // };
-    // CHECK JUNCTION AND TURN
-    JUNCTION NextJunction = AssessJunction();
-    TurnAtJunction(NextPathStep.EXIT_DIRECTION, NextJunction);
+
     //LIFECYCLE END
   };
 }
