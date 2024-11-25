@@ -343,7 +343,8 @@ void TurnUntilLine(bool right) {
 //ALONG-PATH FUNCTIONS
 
 void LineFollowToJunction (int time) {
-  while (true) {
+  bool following = true;
+  while (following) {
     LINE_FOLLOW_STATE followState = ReadLineFollowSensors();
     switch (followState)
     {
@@ -360,11 +361,30 @@ void LineFollowToJunction (int time) {
       break;
 
     case UNSURE: //ok we're either at a junction or have fallen off the line. TODO write the rest of the fn code haha
+      following = false;
       StopDriving();
       //more code here to check for false junctioning
       break;
     }   
   }
+}
+
+void GetOntoCourse () {
+  Serial.println("i'm driving onto the course");
+  bool following = true;
+  while (following) {
+    Drive(true, 200, 0);
+    LINE_FOLLOW_STATE OnCourse = ReadLineFollowSensors();
+    if (OnCourse == 0) {
+      StopDriving();
+      following = false;
+    }
+  }
+  StopDriving();
+  delay(1000);
+  Serial.println("i'm on the course and getting to the first junction");
+  LineFollowToJunction(0);
+  Serial.println("i've detected node zero and i'm ready to start the nav loop!");
 }
 
 bool PickUpBoxAlongLine(int time) { //true if magnetic
@@ -378,16 +398,22 @@ bool PickUpBoxAlongLine(int time) { //true if magnetic
 
 void TurnAtJunction(DIRECTION direction, JUNCTION junction) {
   if (direction == STRAIGHT and junction.AHEAD) {
+      Serial.println("I've found a STRAIGHT, been told to take it, and i'm taking it!");
       Drive(true, 200, 0);
       delay(500);
   } else if (direction == LEFT and junction.LEFT) {
+      Serial.println("I've found a RIGHT turn, been told to take it, and i'm taking it!");
       TurnUntilLine(false);
   } else if (direction == RIGHT and junction.RIGHT) {
+      Serial.println("I've found a RIGHT turn, been told to take it, and i'm taking it!");
       TurnUntilLine(true);
   } else if (direction == TURNAROUND){
       TurnAroundUntilLine(true);
   } else { // something has gone badly wrong aaaaaahhhhhhhhhhhh
-      StopDriving();
+      while true {
+        StopDriving();
+        Serial.println("I am freaking the fuck out!!!!");
+      }
       //screamIntoVoid();
   }
 };
@@ -406,20 +432,29 @@ void setup() {
 
   Serial.println("Motor Shield found.");
 
-  delay(5000); //so we can get some stuff done before the thing do
+  delay(1000); //so we can get some stuff done before the thing do
+  GetOntoCourse();
 }
 
 void ExecutePathSection(PATHSTEP NextSection[], int PathLength) {
   for (int step = 0; step < PathLength; step++) {
     //LIFECYCLE START
     PATHSTEP NextPathStep = NextSection[step];
+    Serial.print("i'm at node ");
+    Serial.print(NextPathStep.nodeId);
+    Serial.print(" turning ");
+    Serial.println(NextPathStep.EXIT_DIRECTION);
+
     //DURING LINE ACTIONS
     switch (NextPathStep.DURING_PATH_ACTION) {
       case NO_ACTION:
-        LineFollowToJunction(NextPathStep.EXPECTED_TIME);
+        Serial.println("i'm line following to junction");
+        LineFollowToJunction(0);
         break;
       case PICKUP_ALONG_PATH:
-        LAST_BOX_MAGNETIC = PickUpBoxAlongLine(NextPathStep.EXPECTED_TIME);
+        Serial.println("i'm picking up a box along path!");
+        LAST_BOX_MAGNETIC = PickUpBoxAlongLine(0);
+        LAST_BOX_MAGNETIC ? Serial.println("The box was magnetic!") : Serial.println("The box wasn't magnetic!");
         break;
     };
     //END OF LINE ACTIONS
@@ -441,18 +476,24 @@ void loop() {
 
   //CHOOSE PATH SECTION
 
+  //the nav state code starts at node zero so we need to get to the first "junction" before this can start
+
   switch (NAVIGATION_STATE) {
-    case 1:
+    case 0:
+      Serial.println("i'm executing path segment 0");
       ExecutePathSection(main_path_0, 5);
       break;
-    case 2:
+    case 1:
+      Serial.println("i'm executing path segment 1");
       LAST_BOX_MAGNETIC ? ExecutePathSection(box1_magnetic, 4) : ExecutePathSection(box1_nonMagnetic, 6);
       break;
-    case 3:
+    case 2:
+      Serial.println("i'm executing path segment 2");
       ExecutePathSection(main_path_1, 1);
       break;
     default:
       StopDriving();
+      Serial.println("i'm done with this shit, i'm getting a marmalade sandwich");
       //youreDone();
       break;
   };
