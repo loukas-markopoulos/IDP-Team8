@@ -33,15 +33,13 @@
 Servo verticalServo;            // initialise servo that controls the height of the claw (0deg in vertical position)
 Servo clawServo;                // initialise servo that controls opening and closing of the claw (0deg in closed position)
 
-const int trigPin = ;           // ENTER PIN FOR TRIGGER
-const int echoPin = ;           // ENTER PIN FOR ECHO
+#define MAX_RANG    (520)
+#define ADC_SOLUTION    (1023.0)
+int sensityPin = A0;
 
 void setup() {
     verticalServo.attach(9);
     clawServo.attach(10);
-
-    pinMode(trigPin, OUTPUT);
-    pinMode(echoPin, INPUT);
 }
 
 void pickup() {
@@ -62,17 +60,12 @@ void pickup() {
     delay(1000);                // then implement code to take current reading (for weight)
 }
 
+float dist_t, sensity_t;
+
 double returnDistance() {
-    digitalWrite(trigPin, LOW);
-    delayMicroseconds(2);
-    digitalWrite(trigPin, HIGH);
-    delayMicroseconds(10);
-    digitalWrite(trigPin, LOW);
-
-    double duration = pulseIn(echoPin, HIGH);
-    double distance = duration * 0.034 / 2;   // distance of object in cm
-
-    return distance;
+    sensity_t = analogRead(sensityPin);
+    dist_t = sensity_t * MAX_RANG / ADC_SOLUTION;
+    return dist_t;
 }
 
 double getAverageReadings(int numReadings, double minDistance) {
