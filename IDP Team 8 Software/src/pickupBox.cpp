@@ -36,31 +36,78 @@ Servo clawServo;                // initialise servo that controls opening and cl
 #define MAX_RANG    (520)
 #define ADC_SOLUTION    (1023.0)
 int sensityPin = A0;
+int magPin = ;      //magnetic sensor pin
 
 void setup() {
     verticalServo.attach(9);
     clawServo.attach(10);
-}
-
-void pickup() {
-    // NOTE: careful with absolute values of angles, need to first know reference angles
-    // alternatively, can use .read() to get current angle then add 90, but this may introduce (cumulative) error
-    
-    // open clawServo whilst in vertical position
-    clawServo.write(90);        // CHANGE ANGLE FOR GEAR RATIO
-    delay(1000);
-    // verticalServo lowers claw
-    verticalServo.write(90);    // should be exactly 90
-    delay(1000);
-    // clawServo closes to grab box 
-    clawServo.write(0);
-    delay(1000);
-    // vertical servo raises claw
-    verticalServo.write(0);
-    delay(1000);                // then implement code to take current reading (for weight)
+    pinMode(magPin, INPUT);
 }
 
 float dist_t, sensity_t;
+float critical_dist;
+
+void loop() {
+    // Detect distance
+    // Drive
+    float distance = returnDistance();
+
+    // stop when box is at desired distance
+    if (distance < critical_dist) {
+        // STOP
+        if (getAverageReadings(10) < (critical_dist + 0.2)) {  // this loop gets more readings and averages to confirm object indeed within range (i.e. not random fluctuation)
+            pickup(distance);
+        }
+    }
+}
+
+void pickup(float distance) {
+    // NOTE: careful with absolute values of angles, need to first know reference angles
+    // alternatively, can use .read() to get current angle then add 90, but this may introduce (cumulative) error
+    magReading(distance);
+
+    // go forward a little bit
+
+    clawServo.write(0);
+    delay(1000);
+    verticalServo.write(0);
+    delay(1000);
+}
+
+bool magnetic = false;
+float magSensorDistance;
+// magSensorDistance < critical distance
+int val = 0;
+
+bool magReading(float distance) {
+    while (distance > (magSensorDistance + 0.2) ||  distance < (magSensorDistance - 0.2)) {
+        if (distance > magSensorDistance) {
+            // forward and redefine distance 
+        }
+        else {
+            // reverse and redefine distance
+        }
+    }
+
+    clawServo.write(90);
+    delay(1000);
+    verticalServo.write(90);
+    delay(1000);
+    clawServo.write(0);
+    delay(1000);
+
+    //magnetic reading
+    val = digitalRead(magPin);
+    if (val == HIGH) {
+        magnetic = true;
+    } else {
+        magnetic = false;
+    }
+
+    clawServo.write(90);
+    delay(1000);
+    return magnetic;
+}
 
 double returnDistance() {
     sensity_t = analogRead(sensityPin);
@@ -68,30 +115,12 @@ double returnDistance() {
     return dist_t;
 }
 
-double getAverageReadings(int numReadings, double minDistance) {
+double getAverageReadings(int numReadings) {
     float readingsSum = 0;
     for(int i = 0; i < numReadings; i++) {
         readingsSum += returnDistance();
     }
     double averageReading = readingsSum / numReadings;
     return averageReading;
-}
-
-void loop() {
-    // Move forward
-
-    // Detect distance
-    long distance = returnDistance();
-
-    // stop when box is at desired distance
-    if (distance < 2) {
-        if (getAverageReadings(10, 2) < 2.3) {  // this loop gets more readings and averages to confirm object indeed within range (i.e. not random fluctuation)
-            pickup();
-        }
-    }
-    // average next 15 values (max US f 30Hz)
-    // if average <= desired distance:
-    // run pickup
-    // else carry on 
 }
 
