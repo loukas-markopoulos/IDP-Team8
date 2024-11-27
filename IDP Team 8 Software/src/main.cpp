@@ -8,7 +8,6 @@ int clawServo = 10;
 void setup() {
     pinMode(verticalServo, OUTPUT);
     pinMode(clawServo, OUTPUT);
-    pinMode(magPin, INPUT);
 }
 
 void servoPulse(int angle, int servo) {
@@ -20,8 +19,7 @@ void servoPulse(int angle, int servo) {
 }
 
 void testServo(int servo) {
-    servoPulse(20, servo)
+    servoPulse(20, servo);
 }
 
-
-testServo(verticalServo)
+testServo(verticalServo);
