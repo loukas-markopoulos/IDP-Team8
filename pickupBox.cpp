@@ -115,12 +115,12 @@ double returnDistance() {
     return dist_t;
 }
 
-double getAverageReadings(int numReadings) {
+float getAverageReadings(int numReadings) {
     float readingsSum = 0;
     for(int i = 0; i < numReadings; i++) {
         readingsSum += returnDistance();
     }
-    double averageReading = readingsSum / numReadings;
+    float averageReading = readingsSum / numReadings;
     return averageReading;
 }
 
