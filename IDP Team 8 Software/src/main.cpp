@@ -100,7 +100,6 @@ static PATHSTEP main_path_2[3] = {
     // Non Magnetic (10) from 5
     // Drop Box
 
-
 };
 
 static PATHSTEP main_path_3[7] = {
@@ -400,7 +399,7 @@ void LineFollowToJunction (int time) {
       break;
     
     case LINE_TO_RIGHT:
-      Drive(true, 200, -22);;
+      Drive(true, 200, -24);;
       break;
 
     case UNSURE: //ok we're either at a junction or have fallen off the line. TODO write the rest of the fn code haha
@@ -456,64 +455,54 @@ void PickUpBox() {
 }
 
 bool PickUpBoxAlongLine(int time) { //true if magnetic
-  // bool approaching = true;
+  bool approaching = true;
 
-  // long PreviousMillis = 0;
-  // long Interval = 500;
-  // bool LEDState = false;
+  long PreviousMillis = 0;
+  long Interval = 500;
+  bool LEDState = false;
 
-  // while (approaching) {
+  while (approaching) {
 
-  //   //led blink code
+    //led blink code
 
-  //   long CurrentMillis = millis();
-  //   if (CurrentMillis - PreviousMillis >= Interval) {
-  //     PreviousMillis = CurrentMillis;
-  //     LEDState = !LEDState;
-  //     digitalWrite(LED_PIN, LEDState);
-  //   }
+    long CurrentMillis = millis();
+    if (CurrentMillis - PreviousMillis >= Interval) {
+      PreviousMillis = CurrentMillis;
+      LEDState = !LEDState;
+      digitalWrite(LED_PIN, LEDState);
+    }
 
-  //   float distance = GetAheadDistance();
-  //   distance += GetAheadDistance();
-  //   distance += GetAheadDistance();
-  //   distance = distance / 3; // very very crude average
+    float distance = GetAheadDistance();
+    Serial.print("ahead distance");
+    Serial.println(distance);
 
-  //   Serial.print("ahead distance");
-  //   Serial.println(distance);
+    if (distance <= 10) { // we have seen the box
+      StopDriving();
+      delay(1000);
+      approaching = false;
+    };
 
-  //   if (distance <= 16) { // we have seen the box
-  //     approaching = false;
-  //     StopDriving();
-  //     delay(1000);
-  //   };
+    LINE_FOLLOW_STATE followState = ReadLineFollowSensors();
 
-  //   LINE_FOLLOW_STATE followState = ReadLineFollowSensors();
-  //   switch (followState)
-  //   {
-  //   case CENTRAL:
-  //     Drive(true, 200, 0);
-  //     break;
+    switch (followState) {
+      case CENTRAL:
+        Drive(true, 200, 0);
+        break;
 
-  //   case LINE_TO_LEFT:
-  //     Drive(true, 200, 22);;
-  //     break;
-    
-  //   case LINE_TO_RIGHT:
-  //     Drive(true, 200, -22);;
-  //     break;
-
-  //   case UNSURE: //ok we're either at a junction or have fallen off the line. TODO write the rest of the fn code haha
-  //     approaching = false;
-  //     StopDriving();
-  //     //more code here to check for false junctioning
-  //     break;
-  //   }   
+      case LINE_TO_LEFT:
+        Drive(true, 200, 22);;
+        break;
+      
+      case LINE_TO_RIGHT:
+        Drive(true, 200, -24);;
+        break;
+    }   
   
-  // }
+  }
 
-  // StopDriving();
+  StopDriving();
 
-  // PickUpBox(); //pick up the box...
+  PickUpBox(); //pick up the box...
   
   LineFollowToJunction(0); //and finish the line!
   return true; //oh wow it was magnetic, could never have guessed...
@@ -522,6 +511,7 @@ bool PickUpBoxAlongLine(int time) { //true if magnetic
 //TODO: END-PATH FUNCTIONS
 
 void DropBox() {
+  //change this to add some reverse
   SetServoToAngle(10, LIFT_SERVO_PIN);
   delay(700);
   SetServoToAngle(40, CLAW_SERVO_PIN);
@@ -577,8 +567,8 @@ void setup() {
 
   Serial.println("Motor Shield found.");
 
-  delay(1000); //so we can get some stuff done before the thing do
-  GetOntoCourse();
+  delay(3000);
+  //GetOntoCourse();
 }
 
 void ExecutePathSection(PATHSTEP NextSection[], int PathLength) {
@@ -631,6 +621,9 @@ void loop() {
   //the nav state code starts at node zero so we need to get to the first "junction" before this can start
 
   switch (NAVIGATION_STATE) {
+    // case 0:
+    //   PickUpBoxAlongLine(0);
+    //   break;
     case 0:
       Serial.println("i'm executing path segment 0");
       ExecutePathSection(main_path_0, 5);
@@ -651,14 +644,14 @@ void loop() {
       Serial.println("i'm executing path segment 4");
       ExecutePathSection(main_path_2, 3);
       break;
-    // case 5:
-    //   Serial.println("i'm executing path segment 5");
-    //   LAST_BOX_MAGNETIC ? ExecutePathSection(box3_magnetic, 6) : ExecutePathSection(box3_nonMagnetic, 5);
-    //   break;
-    // case 6:
-    //   Serial.println("i'm executing path segment 6");
-    //   ExecutePathSection(main_path_3, 7);
-    //   break;
+    case 5:
+      Serial.println("i'm executing path segment 5");
+      LAST_BOX_MAGNETIC ? ExecutePathSection(box3_magnetic, 6) : ExecutePathSection(box3_nonMagnetic, 5);
+      break;
+    case 6:
+      Serial.println("i'm executing path segment 6");
+      ExecutePathSection(main_path_3, 7);
+      break;
   //    case 7:
   //     Serial.println("i'm executing path segment 7");
   //     LAST_BOX_MAGNETIC ? ExecutePathSection(box4_magnetic, 6) : ExecutePathSection(box4_nonMagnetic, 4);
