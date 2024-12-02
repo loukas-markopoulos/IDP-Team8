@@ -22,4 +22,7 @@ void testServo(int servo) {
     servoPulse(20, servo);
 }
 
-testServo(verticalServo);
+void loop() {
+    testServo(verticalServo);
+    break;
+}
