@@ -93,9 +93,8 @@ static PATHSTEP main_path_1[1] = {
 static PATHSTEP main_path_2[3] = {
  // BOX3 NODE 6-5
     {13, RIGHT, NO_ACTION, NO_ACTION, 0},
-    {6, RIGHT, NO_ACTION, NO_ACTION, 0},
-    // PickUpBox BOX FUNCTION  
-    {5, RIGHT, PICKUP_ALONG_PATH, NO_ACTION, 0},
+    {6, RIGHT, PICKUP_ALONG_PATH, NO_ACTION, 0},
+    {5, RIGHT, NO_ACTION, NO_ACTION, 0},
     // Magnetic (9) from 5
     // Non Magnetic (10) from 5
     // Drop Box
@@ -106,8 +105,7 @@ static PATHSTEP main_path_3[7] = {
      // BOX4 NODE 2-3
     {13, RIGHT, NO_ACTION, NO_ACTION, 0},
     {6, STRAIGHT, NO_ACTION, NO_ACTION, 0},
-    {3, RIGHT, NO_ACTION, NO_ACTION, 0},
-    // PickUpBox BOX FUNCTION
+    {3, RIGHT, PICKUP_ALONG_PATH, NO_ACTION, 0},
     {2, STRAIGHT, NO_ACTION, NO_ACTION, 0},
     {1, RIGHT, NO_ACTION, NO_ACTION, 0},
     {4, STRAIGHT, NO_ACTION, NO_ACTION, 0},
@@ -121,9 +119,9 @@ static PATHSTEP main_path_4[3] = {
 
     // BOX5 OFF NODE 6-5 LINE
     {13, RIGHT, NO_ACTION, NO_ACTION, 0},
-    {6, RIGHT, NO_ACTION, NO_ACTION, 0},
-    // PickUpBox BOX OFF LINE FUNCTION 
-    {5, RIGHT, SEARCH, NO_ACTION, 0},
+    {6, RIGHT, SEARCH, NO_ACTION, 0},
+    // PickUpBox BOX OFF LINE FUNCTION !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    {5, RIGHT, NO_ACTION, NO_ACTION, 0},
     // Magnetic (9) from 5
     // Non Magnetic (10) from 5
     // Drop Box
@@ -134,10 +132,10 @@ static PATHSTEP main_path_5[5] = {
       // BOX6 OFF NODE 1-2 LINE
     {12, LEFT, NO_ACTION, NO_ACTION, 0},
     {4, STRAIGHT, NO_ACTION, NO_ACTION, 0},
-    {1, LEFT, NO_ACTION, NO_ACTION, 0},
+    {1, LEFT, SEARCH, NO_ACTION, 0},
     // PickUpBox BOX OFF LINE FUNCTION
     {2, STRAIGHT, NO_ACTION, NO_ACTION, 0},
-    {3, LEFT, SEARCH, NO_ACTION, 0},
+    {3, LEFT, NO_ACTION, NO_ACTION, 0},
     // Magnetic (9) from 3 and back to start
     // Non Magnetic (9) from 3 and back to start
     // Drop Box
@@ -181,7 +179,6 @@ static PATHSTEP box3_magnetic[6] = {
     {11, LEFT, NO_ACTION, NO_ACTION, 0},
     {7, RIGHT, NO_ACTION, NO_ACTION, 0},
     {8, STRAIGHT, NO_ACTION, NO_ACTION, 0},
-    {13, RIGHT, NO_ACTION, NO_ACTION, 0},
 };
 
 static PATHSTEP box3_nonMagnetic[5] = {
@@ -208,7 +205,8 @@ static PATHSTEP box4_nonMagnetic[4] = {
     {8, RIGHT, NO_ACTION, NO_ACTION, 0},
 };
 
-static PATHSTEP box5_magnetic[3] = {
+static PATHSTEP box5_magnetic[4] = {
+    {11, LEFT, NO_ACTION, NO_ACTION, 0},
     {9, TURNAROUND, NO_ACTION, NO_ACTION, 0},
     {11, LEFT, NO_ACTION, NO_ACTION, 0},
     {7, LEFT, NO_ACTION, NO_ACTION, 0},
@@ -372,13 +370,15 @@ void TurnUntilLine(bool right) {
 void LineFollowToJunction (int time) {
   bool following = true;
 
-  long PreviousMillis = 0;
-  long Interval = 500;
+  int PreviousMillis = 0;
+  int Interval = 500;
   bool LEDState = false;
+
+  LINE_FOLLOW_STATE OldState = CENTRAL;
 
   while (following) {
 
-    long CurrentMillis = millis();
+    int CurrentMillis = millis();
 
     if (CurrentMillis - PreviousMillis >= Interval) {
       PreviousMillis = CurrentMillis;
@@ -388,6 +388,7 @@ void LineFollowToJunction (int time) {
 
 
     LINE_FOLLOW_STATE followState = ReadLineFollowSensors();
+
     switch (followState)
     {
     case CENTRAL:
@@ -402,12 +403,13 @@ void LineFollowToJunction (int time) {
       Drive(true, 200, -24);;
       break;
 
-    case UNSURE: //ok we're either at a junction or have fallen off the line. TODO write the rest of the fn code haha
+    case UNSURE: //ok we're either at a junction or have fallen off the line.
       following = false;
       StopDriving();
-      //more code here to check for false junctioning
       break;
     }   
+
+    OldState = followState;
   }
 }
 
@@ -457,15 +459,15 @@ void PickUpBox() {
 bool PickUpBoxAlongLine(int time) { //true if magnetic
   bool approaching = true;
 
-  long PreviousMillis = 0;
-  long Interval = 500;
+  int PreviousMillis = 0;
+  int Interval = 500;
   bool LEDState = false;
 
   while (approaching) {
 
     //led blink code
 
-    long CurrentMillis = millis();
+    int CurrentMillis = millis();
     if (CurrentMillis - PreviousMillis >= Interval) {
       PreviousMillis = CurrentMillis;
       LEDState = !LEDState;
@@ -511,8 +513,10 @@ bool PickUpBoxAlongLine(int time) { //true if magnetic
 //TODO: END-PATH FUNCTIONS
 
 void DropBox() {
-  //change this to add some reverse
-  SetServoToAngle(10, LIFT_SERVO_PIN);
+  Drive(false, 100, 0);
+  delay(1300);
+  StopDriving();
+  SetServoToAngle(25, LIFT_SERVO_PIN);
   delay(700);
   SetServoToAngle(40, CLAW_SERVO_PIN);
   delay(700);
@@ -550,6 +554,7 @@ void TurnAtJunction(DIRECTION direction, JUNCTION junction) {
 void setup() {
   Serial.begin(9600);  
   Serial.println("initialising the absolute bear minimum...");
+  Serial.println("test");
 
   pinMode(LIFT_SERVO_PIN, OUTPUT);
   pinMode(CLAW_SERVO_PIN, OUTPUT);  
@@ -568,7 +573,7 @@ void setup() {
   Serial.println("Motor Shield found.");
 
   delay(3000);
-  //GetOntoCourse();
+  GetOntoCourse();
 }
 
 void ExecutePathSection(PATHSTEP NextSection[], int PathLength) {
@@ -621,10 +626,9 @@ void loop() {
   //the nav state code starts at node zero so we need to get to the first "junction" before this can start
 
   switch (NAVIGATION_STATE) {
-    // case 0:
-    //   PickUpBoxAlongLine(0);
-    //   break;
     case 0:
+      // LineFollowToJunction(0);
+      // TurnAroundUntilLine(true);
       Serial.println("i'm executing path segment 0");
       ExecutePathSection(main_path_0, 5);
       break;
@@ -652,26 +656,26 @@ void loop() {
       Serial.println("i'm executing path segment 6");
       ExecutePathSection(main_path_3, 7);
       break;
-  //    case 7:
-  //     Serial.println("i'm executing path segment 7");
-  //     LAST_BOX_MAGNETIC ? ExecutePathSection(box4_magnetic, 6) : ExecutePathSection(box4_nonMagnetic, 4);
-  //     break;
-  //   case 8:
-  //     Serial.println("i'm executing path segment 8");
-  //     ExecutePathSection(main_path_4, 3);
-  //     break;
-  //   // case 9:
-  //   //   Serial.println("i'm executing path segment 7");
-  //   //   LAST_BOX_MAGNETIC ? ExecutePathSection(box5_magnetic, 3) : ExecutePathSection(box5_nonMagnetic, 6);
-  //   //   break;
-  //   // case 10:
-  //   //   Serial.println("i'm executing path segment 8");
-  //   //   ExecutePathSection(main_path_5, 5);
-  //   //   break;
-  //   // case 11:
-  //   //   Serial.println("i'm executing path segment 9 (the end is near)");
-  //   //   LAST_BOX_MAGNETIC ? ExecutePathSection(box6_magnetic, 10) : ExecutePathSection(box6_nonMagnetic, 9);
-  //   //   break;
+     case 7:
+      Serial.println("i'm executing path segment 7");
+      LAST_BOX_MAGNETIC ? ExecutePathSection(box4_magnetic, 6) : ExecutePathSection(box4_nonMagnetic, 4);
+      break;
+    // case 8:
+    //   Serial.println("i'm executing path segment 8");
+    //   ExecutePathSection(main_path_4, 3);
+    //   break;
+    // case 9:
+    //   Serial.println("i'm executing path segment 7");
+    //   LAST_BOX_MAGNETIC ? ExecutePathSection(box5_magnetic, 3) : ExecutePathSection(box5_nonMagnetic, 6);
+    //   break;
+    // case 10:
+    //   Serial.println("i'm executing path segment 8");
+    //   ExecutePathSection(main_path_5, 5);
+    //   break;
+    // case 11:
+    //   Serial.println("i'm executing path segment 9 (the end is near)");
+    //   LAST_BOX_MAGNETIC ? ExecutePathSection(box6_magnetic, 10) : ExecutePathSection(box6_nonMagnetic, 9);
+    //   break;
 
     default:
       StopDriving();
