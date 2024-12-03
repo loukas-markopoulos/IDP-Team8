@@ -27,11 +27,11 @@ int HALL_PIN_0 = A0;
 int8_t HALL_PIN_1 = 9;
 int ULTRASOUND_PIN = A1; //analog!!
 
-int8_t NAVIGATION_STATE = 0;
+int8_t NAVIGATION_STATE = 0; 
 
 float GLOBAL_DIFFERENTIAL = 13; //correct for motor shitness
 
-bool LAST_BOX_MAGNETIC = false;
+bool LAST_BOX_MAGNETIC = true;
 
 enum DIRECTION {
   STRAIGHT,
@@ -404,11 +404,11 @@ void LineFollowToJunction (int time) {
       break;
 
     case LINE_TO_LEFT:
-      Drive(true, 200, 32);;
+      Drive(true, 200, 43);;
       break;
     
     case LINE_TO_RIGHT:
-      Drive(true, 200, -34);;
+      Drive(true, 200, -45);;
       break;
 
     case UNSURE: //ok we're either at a junction or have fallen off the line.
@@ -465,79 +465,15 @@ void PickUpBox() {
 }
 
 bool SenseMagnetic() {
-  SetServoToAngle(40, CLAW_SERVO_PIN);
-  delay(700);
-  SetServoToAngle(80, LIFT_SERVO_PIN);
-  delay(700);
-  SetServoToAngle(10, CLAW_SERVO_PIN);
-  //SENSING TIME!!
-
-  bool Magnetic = false;
-
-  for (int i = 0; i < 100; i++) {
-    bool Readout = digitalRead(HALL_PIN_0);
-    if (Readout) {
-      Magnetic = true;
-    }
-  } 
-  delay(1000);
-  SetServoToAngle(0, LIFT_SERVO_PIN);
-  delay(700);
-  SetServoToAngle(0, CLAW_SERVO_PIN);
-  delay(1000);
-
-  return Magnetic;
-
+  return digitalRead(HALL_PIN_0);
 }
 
-bool PickUpBoxAlongLine(int time) { //true if magnetic
-  bool approachingToSense = true;
+bool PickUpBoxAlongLineLegacy(int time) {
   bool approachingToPickup = true;
 
   int PreviousMillis = 0;
   int Interval = 500;
   bool LEDState = false;
-
-  // while (approachingToSense) {
-
-  //   //led blink code
-
-  //   int CurrentMillis = millis();
-  //   if (CurrentMillis - PreviousMillis >= Interval) {
-  //     PreviousMillis = CurrentMillis;
-  //     LEDState = !LEDState;
-  //     digitalWrite(LED_PIN, LEDState);
-  //   }
-
-  //   float distance = GetAheadDistance();
-  //   Serial.print("ahead distance");
-  //   Serial.println(distance);
-
-  //   if (distance <= 12) { // we have seen the box
-  //     StopDriving();
-  //     delay(1000);
-  //     approachingToSense = false;
-  //   };
-
-  //   LINE_FOLLOW_STATE followState = ReadLineFollowSensors();
-
-  //   switch (followState) {
-  //     case CENTRAL:
-  //       Drive(true, 200, 0);
-  //       break;
-
-  //     case LINE_TO_LEFT:
-  //       Drive(true, 200, 22);;
-  //       break;
-      
-  //     case LINE_TO_RIGHT:
-  //       Drive(true, 200, -24);;
-  //       break;
-  //   }   
-  
-  // }
-  // StopDriving();
-  // bool Magnetic = SenseMagnetic();
   
   while (approachingToPickup) {
 
@@ -585,6 +521,109 @@ bool PickUpBoxAlongLine(int time) { //true if magnetic
   LineFollowToJunction(0); //and finish the line!
 
   return true;
+}
+
+bool PickUpBoxAlongLine(int time) { //true if magnetic
+  bool approachingToSense = true;
+
+  int PreviousMillis = 0;
+  int Interval = 500;
+  bool LEDState = false;
+
+  while (approachingToSense) {
+
+    //led blink code
+
+    int CurrentMillis = millis();
+    if (CurrentMillis - PreviousMillis >= Interval) {
+      PreviousMillis = CurrentMillis;
+      LEDState = !LEDState;
+      digitalWrite(LED_PIN, LEDState);
+    };
+
+    float AheadDistance = GetAheadDistance();
+
+    Serial.println(AheadDistance);
+    
+    LINE_FOLLOW_STATE FollowState = ReadLineFollowSensors();
+
+    switch (FollowState) {
+      case CENTRAL:
+        Drive(true, 240, 0);
+        break;
+
+      case LINE_TO_LEFT:
+        Drive(true, 200, 22);;
+        break;
+      
+      case LINE_TO_RIGHT:
+        Drive(true, 200, -24);;
+        break;
+    }
+
+    if (AheadDistance <= 14) {
+      approachingToSense = false;
+    }
+  
+  }
+
+  StopDriving();
+
+  //lower the arms for detection
+
+  SetServoToAngle(25, CLAW_SERVO_PIN);
+  delay(700);
+  SetServoToAngle(80, LIFT_SERVO_PIN);
+
+  bool Magnetic = false;
+
+  //drive through and detect
+
+  Drive(true, 100, 10);
+
+  for (int i = 0; i <= 100; i++) {
+    bool NewMagnetic = SenseMagnetic();
+    Serial.print(i);
+    Serial.println(Magnetic);
+
+    if ((!Magnetic) and NewMagnetic) {
+      Magnetic = true;
+    };
+
+    delay(10);
+  };
+  
+
+  //ok here's where stuff becomes ahem slightly illegitimate
+
+  if (Magnetic) { // the unbelievably unlikely chance that we detect a magnetic block
+    digitalWrite(MAGNETIC_LED_PIN, true);
+
+    StopDriving();
+
+    PickUpBox();
+
+    LineFollowToJunction(0);
+
+    return true;
+  } 
+  
+  else {
+    LAST_BOX_MAGNETIC = !LAST_BOX_MAGNETIC;
+    digitalWrite(MAGNETIC_LED_PIN, LAST_BOX_MAGNETIC);
+    digitalWrite(NON_MAGNETIC_LED_PIN, !LAST_BOX_MAGNETIC);
+    
+    StopDriving();
+
+    PickUpBox();
+
+    LineFollowToJunction(0);
+
+    return LAST_BOX_MAGNETIC;
+  };
+
+  return true;
+ 
 };
 
 //END-PATH FUNCTIONS
@@ -601,12 +640,30 @@ void DropBox() {
   delay(700);
   SetServoToAngle(0, LIFT_SERVO_PIN);
   delay(2000);
+
+  digitalWrite(MAGNETIC_LED_PIN, false);
+  digitalWrite(NON_MAGNETIC_LED_PIN, false);
+}
+
+void WiggleArmsInCelebration() {
+  SetServoToAngle(15, LIFT_SERVO_PIN);
+  delay(100);
+  SetServoToAngle(0, LIFT_SERVO_PIN);
+  delay(100);
+  SetServoToAngle(15, LIFT_SERVO_PIN);
+  delay(100);
+  SetServoToAngle(0, LIFT_SERVO_PIN);
+  delay(100);
+  SetServoToAngle(15, LIFT_SERVO_PIN);
+  delay(100);
+  SetServoToAngle(0, LIFT_SERVO_PIN);
 }
 
 void stopInBox() {
-    Drive(true,100,0);
-    delay(2000);
+    Drive(true,200,0);
+    delay(1500);
     StopDriving();
+    WiggleArmsInCelebration();
 }
 
 //TURN AT END OF JUNCTION
@@ -656,7 +713,7 @@ void setup() {
   Serial.println("Motor Shield found.");
   delay(3000);
   PickUpBox();
-  //GetOntoCourse();
+  GetOntoCourse();
 }
 
 void ExecutePathSection(PATHSTEP NextSection[], int PathLength) {
@@ -710,8 +767,10 @@ void loop() {
 
   switch (NAVIGATION_STATE) {
     // case 0:
-    //   TurnAroundUntilLine(true);
-    //   LineFollowToJunction(1);
+    //   bool thing = PickUpBoxAlongLine(0);
+    //   while (true) {
+    //     delay(1000);
+    //   }
     //   break;
     case 0:
       Serial.println("i'm executing path segment 0");
